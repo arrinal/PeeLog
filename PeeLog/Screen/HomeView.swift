@@ -1,15 +1,15 @@
 //
-//  ContentView.swift
+//  HomeView.swift
 //  PeeLog
 //
-//  Created by Arrinal S on 04/05/25.
+//  Created by Arrinal S on 19/05/25.
 //
 
 import SwiftUI
 import SwiftData
 import MapKit
 
-struct ContentView: View {
+struct HomeView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \PeeEvent.timestamp, order: .reverse) private var peeEvents: [PeeEvent]
     @State private var showingAddEventSheet = false
@@ -135,6 +135,6 @@ struct ContentView: View {
 }
 
 #Preview {
-    ContentView()
+    HomeView()
         .modelContainer(for: PeeEvent.self, inMemory: true)
 }
