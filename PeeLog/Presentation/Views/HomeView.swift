@@ -2,7 +2,7 @@
 //  HomeView.swift
 //  PeeLog
 //
-//  Created by Arrinal S on 19/05/25.
+//  Created by Arrinal S on 04/05/25.
 //
 
 import SwiftUI
@@ -10,29 +10,24 @@ import SwiftData
 import MapKit
 
 struct HomeView: View {
-    @Environment(\.modelContext) private var modelContext
-    @Query(sort: \PeeEvent.timestamp, order: .reverse) private var peeEvents: [PeeEvent]
+    @ObservedObject var viewModel: HomeViewModel
     @State private var showingAddEventSheet = false
     @State private var selectedEvent: PeeEvent?
     @State private var showingMapSheet = false
     @State private var mapPosition: MapCameraPosition = .automatic
     
-    var todaysEvents: [PeeEvent] {
-        peeEvents.filter { Calendar.current.isDateInToday($0.timestamp) }
-    }
-    
     var body: some View {
         NavigationStack {
             List {
-                Section(header: Text("Today - Pee events: \(todaysEvents.count)")) {
-                    if todaysEvents.isEmpty {
+                Section(header: Text("Today - Pee events: \(viewModel.todaysEvents.count)")) {
+                    if viewModel.todaysEvents.isEmpty {
                         Text("No pee events today")
                             .foregroundColor(.secondary)
                             .frame(maxWidth: .infinity, alignment: .center)
                             .padding()
                             .listRowBackground(Color.blue.opacity(0.1))
                     } else {
-                        ForEach(todaysEvents, id: \.id) { event in
+                        ForEach(viewModel.todaysEvents, id: \.id) { event in
                             HStack {
                                 // Quality indicator
                                 Circle()
@@ -87,7 +82,7 @@ struct HomeView: View {
                             }
                             .padding(.vertical, 4)
                         }
-                        .onDelete(perform: deleteEvents)
+                        .onDelete(perform: viewModel.deleteEvent)
                     }
                 }
             }
@@ -124,17 +119,16 @@ struct HomeView: View {
             .background(Color.blue.opacity(0.1).ignoresSafeArea())
         }
     }
-    
-    private func deleteEvents(at offsets: IndexSet) {
-        withAnimation {
-            for index in offsets {
-                modelContext.delete(todaysEvents[index])
-            }
-        }
-    }
 }
 
 #Preview {
-    HomeView()
-        .modelContainer(for: PeeEvent.self, inMemory: true)
-}
+    let container = try! ModelContainer(for: PeeEvent.self)
+    let repository = PeeEventRepositoryImpl(modelContext: container.mainContext)
+    let todaysUseCase = GetTodaysPeeEventsUseCase(repository: repository)
+    let deleteUseCase = DeletePeeEventUseCase(repository: repository)
+    
+    HomeView(viewModel: HomeViewModel(
+        getTodaysPeeEventsUseCase: todaysUseCase,
+        deleteEventUseCase: deleteUseCase
+    ))
+} 

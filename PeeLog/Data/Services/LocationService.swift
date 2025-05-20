@@ -1,16 +1,15 @@
 //
-//  LocationManager.swift
+//  LocationService.swift
 //  PeeLog
 //
-//  Created by Arrinal S on 04/05/25.
+//  Created by Arrinal S on 06/05/25.
 //
 
 import Foundation
 import CoreLocation
 import SwiftUI
-import MapKit
 
-class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
+class LocationService: NSObject, ObservableObject, CLLocationManagerDelegate {
     private let locationManager = CLLocationManager()
     private let geocoder = CLGeocoder()
     
@@ -121,7 +120,13 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         authorizationStatus = manager.authorizationStatus
         debugMessage += "\nAuthorization changed: \(statusToString(manager.authorizationStatus))"
         
-        if manager.authorizationStatus == .authorizedWhenInUse || manager.authorizationStatus == .authorizedAlways {
+        #if os(macOS)
+        let isAuthorized = manager.authorizationStatus == .authorized
+        #else
+        let isAuthorized = manager.authorizationStatus == .authorizedWhenInUse || manager.authorizationStatus == .authorizedAlways
+        #endif
+        
+        if isAuthorized {
             debugMessage += "\nAuthorized, starting location updates"
             startUpdatingLocation()
         } else if manager.authorizationStatus == .denied || manager.authorizationStatus == .restricted {
@@ -235,4 +240,4 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             self.isLoadingLocation = false
         }
     }
-}
+} 
