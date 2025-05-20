@@ -145,4 +145,4 @@ struct LocationMapView: View {
         longitude: -122.4194,
         locationName: "San Francisco"
     ))
-}
+} 

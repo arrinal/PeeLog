@@ -10,21 +10,14 @@ import SwiftData
 import MapKit
 
 struct MapHistoryView: View {
-    @Query(sort: \PeeEvent.timestamp, order: .reverse) private var allPeeEvents: [PeeEvent]
-    @State private var mapCameraPosition: MapCameraPosition = .automatic
-    @State private var selectedEvent: PeeEvent?
+    @ObservedObject var viewModel: MapHistoryViewModel
     @State private var showingSheet = false
-    
-    // Filter only events with location data
-    var eventsWithLocation: [PeeEvent] {
-        allPeeEvents.filter { $0.hasLocation }
-    }
     
     var body: some View {
         NavigationStack {
             ZStack {
-                Map(position: $mapCameraPosition, selection: $selectedEvent) {
-                    ForEach(eventsWithLocation, id: \.id) { event in
+                Map(position: $viewModel.mapCameraPosition, selection: $viewModel.selectedEvent) {
+                    ForEach(viewModel.eventsWithLocation, id: \.id) { event in
                         if let coordinate = event.locationCoordinate {
                             Marker(event.locationName ?? "Pee Event", coordinate: coordinate)
                                 .tint(event.quality.color)
@@ -38,7 +31,7 @@ struct MapHistoryView: View {
                 
                 VStack {
                     Spacer()
-                    Text("\(eventsWithLocation.count) events on map")
+                    Text("\(viewModel.eventsWithLocation.count) events on map")
                         .font(.caption)
                         .padding(8)
                         .background(.ultraThinMaterial)
@@ -47,10 +40,10 @@ struct MapHistoryView: View {
                 }
             }
             .navigationTitle("Pee Map")
-            .sheet(item: $selectedEvent) { event in
+            .sheet(item: $viewModel.selectedEvent) { event in
                 LocationMapView(event: event)
             }
-            .onChange(of: selectedEvent) { oldValue, newValue in
+            .onChange(of: viewModel.selectedEvent) { oldValue, newValue in
                 if newValue != nil {
                     showingSheet = true
                 }
@@ -60,6 +53,9 @@ struct MapHistoryView: View {
 }
 
 #Preview {
-    MapHistoryView()
-        .modelContainer(for: PeeEvent.self, inMemory: true)
+    let container = try! ModelContainer(for: PeeEvent.self)
+    let repository = PeeEventRepositoryImpl(modelContext: container.mainContext)
+    let useCase = GetPeeEventsWithLocationUseCase(repository: repository)
+    
+    MapHistoryView(viewModel: MapHistoryViewModel(getPeeEventsWithLocationUseCase: useCase))
 } 

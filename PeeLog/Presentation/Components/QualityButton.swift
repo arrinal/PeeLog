@@ -54,4 +54,4 @@ struct QualityButton_Previews: PreviewProvider {
         .padding()
         .previewLayout(.sizeThatFits)
     }
-}
+} 
