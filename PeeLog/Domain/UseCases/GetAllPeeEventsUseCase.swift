@@ -5,9 +5,9 @@
 //  Created by Arrinal S on 06/05/25.
 //
 
-import Foundation
+import SwiftData
 
-// Use case for getting all events
+// Use case for fetching all events
 class GetAllPeeEventsUseCase {
     private let repository: PeeEventRepository
     
@@ -15,7 +15,7 @@ class GetAllPeeEventsUseCase {
         self.repository = repository
     }
     
-    func execute() -> [PeeEvent] {
-        return repository.getAllEvents()
+    func execute(context: ModelContext) -> [PeeEvent] {
+        return repository.getAllEvents(context: context)
     }
 } 

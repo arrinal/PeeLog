@@ -10,6 +10,7 @@ import SwiftData
 import MapKit
 
 struct MapHistoryView: View {
+    @Environment(\.modelContext) private var modelContext
     @ObservedObject var viewModel: MapHistoryViewModel
     @State private var showingSheet = false
     
@@ -49,13 +50,17 @@ struct MapHistoryView: View {
                 }
             }
         }
+        .onAppear {
+            viewModel.loadEventsWithLocation(context: modelContext)
+        }
     }
 }
 
 #Preview {
     let container = try! ModelContainer(for: PeeEvent.self)
-    let repository = PeeEventRepositoryImpl(modelContext: container.mainContext)
+    let repository = PeeEventRepositoryImpl()
     let useCase = GetPeeEventsWithLocationUseCase(repository: repository)
     
     MapHistoryView(viewModel: MapHistoryViewModel(getPeeEventsWithLocationUseCase: useCase))
+        .modelContainer(container)
 } 

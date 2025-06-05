@@ -10,6 +10,7 @@ import SwiftData
 import MapKit
 
 struct HomeView: View {
+    @Environment(\.modelContext) private var modelContext
     @ObservedObject var viewModel: HomeViewModel
     @State private var showingAddEventSheet = false
     @State private var selectedEvent: PeeEvent?
@@ -82,7 +83,9 @@ struct HomeView: View {
                             }
                             .padding(.vertical, 4)
                         }
-                        .onDelete(perform: viewModel.deleteEvent)
+                        .onDelete { offsets in
+                            viewModel.deleteEvent(at: offsets, context: modelContext)
+                        }
                     }
                 }
             }
@@ -101,6 +104,9 @@ struct HomeView: View {
                 }
             }
             .sheet(isPresented: $showingAddEventSheet) {
+                // Refresh data when sheet is dismissed
+                viewModel.loadTodaysEvents(context: modelContext)
+            } content: {
                 AddEventView()
             }
             .sheet(isPresented: $showingMapSheet, onDismiss: {
@@ -118,12 +124,15 @@ struct HomeView: View {
             }
             .background(Color.blue.opacity(0.1).ignoresSafeArea())
         }
+        .onAppear {
+            viewModel.loadTodaysEvents(context: modelContext)
+        }
     }
 }
 
 #Preview {
     let container = try! ModelContainer(for: PeeEvent.self)
-    let repository = PeeEventRepositoryImpl(modelContext: container.mainContext)
+    let repository = PeeEventRepositoryImpl()
     let todaysUseCase = GetTodaysPeeEventsUseCase(repository: repository)
     let deleteUseCase = DeletePeeEventUseCase(repository: repository)
     
@@ -131,4 +140,5 @@ struct HomeView: View {
         getTodaysPeeEventsUseCase: todaysUseCase,
         deleteEventUseCase: deleteUseCase
     ))
+    .modelContainer(container)
 } 

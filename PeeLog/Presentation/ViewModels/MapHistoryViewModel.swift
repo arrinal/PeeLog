@@ -8,7 +8,9 @@
 import Foundation
 import SwiftUI
 import MapKit
+import SwiftData
 
+@MainActor
 class MapHistoryViewModel: ObservableObject {
     private let getPeeEventsWithLocationUseCase: GetPeeEventsWithLocationUseCase
     
@@ -18,12 +20,10 @@ class MapHistoryViewModel: ObservableObject {
     
     init(getPeeEventsWithLocationUseCase: GetPeeEventsWithLocationUseCase) {
         self.getPeeEventsWithLocationUseCase = getPeeEventsWithLocationUseCase
-        
-        loadEventsWithLocation()
     }
     
-    func loadEventsWithLocation() {
-        eventsWithLocation = getPeeEventsWithLocationUseCase.execute()
+    func loadEventsWithLocation(context: ModelContext) {
+        eventsWithLocation = getPeeEventsWithLocationUseCase.execute(context: context)
     }
     
     func selectEvent(_ event: PeeEvent) {

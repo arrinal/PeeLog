@@ -7,7 +7,11 @@
 
 import Foundation
 import SwiftUI
+import CoreLocation
+import Combine
+import SwiftData
 
+@MainActor
 class AddEventViewModel: ObservableObject {
     private let addPeeEventUseCase: AddPeeEventUseCase
     private let locationService: LocationService
@@ -18,9 +22,39 @@ class AddEventViewModel: ObservableObject {
     @Published var selectedQuality: PeeQuality = .paleYellow
     @Published var includeLocation = false
     
+    // Published properties that mirror the location service
+    @Published var isLoadingLocation = false
+    @Published var lastError: String?
+    @Published var locationName: String?
+    @Published var location: CLLocation?
+    
     init(addPeeEventUseCase: AddPeeEventUseCase, locationService: LocationService) {
         self.addPeeEventUseCase = addPeeEventUseCase
         self.locationService = locationService
+        
+        // Set up observation of location service changes using Combine
+        locationService.$isLoadingLocation
+            .receive(on: DispatchQueue.main)
+            .assign(to: &$isLoadingLocation)
+            
+        locationService.$lastError
+            .receive(on: DispatchQueue.main)
+            .assign(to: &$lastError)
+            
+        locationService.$locationName
+            .receive(on: DispatchQueue.main)
+            .assign(to: &$locationName)
+            
+        locationService.$location
+            .receive(on: DispatchQueue.main)
+            .assign(to: &$location)
+    }
+    
+    private func updateLocationProperties() {
+        isLoadingLocation = locationService.isLoadingLocation
+        lastError = locationService.lastError
+        locationName = locationService.locationName
+        location = locationService.location
     }
     
     var isFutureDate: Bool {
@@ -44,7 +78,7 @@ class AddEventViewModel: ObservableObject {
         return combinedDateTime > Date()
     }
     
-    func saveEvent() {
+    func saveEvent(context: ModelContext) {
         // Combine date and time components
         let calendar = Calendar.current
         let dateComponents = calendar.dateComponents([.year, .month, .day], from: date)
@@ -85,7 +119,7 @@ class AddEventViewModel: ObservableObject {
             )
         }
         
-        addPeeEventUseCase.execute(event: newEvent)
+        addPeeEventUseCase.execute(event: newEvent, context: context)
     }
     
     func requestLocationPermission() {

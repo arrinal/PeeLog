@@ -9,7 +9,8 @@ import Foundation
 import CoreLocation
 import SwiftUI
 
-class LocationService: NSObject, ObservableObject, CLLocationManagerDelegate {
+@MainActor
+class LocationService: NSObject, ObservableObject, @preconcurrency CLLocationManagerDelegate {
     private let locationManager = CLLocationManager()
     private let geocoder = CLGeocoder()
     
@@ -86,15 +87,17 @@ class LocationService: NSObject, ObservableObject, CLLocationManagerDelegate {
         
         // Set a timeout to ensure loading state doesn't get stuck
         let timeoutWorkItem = DispatchWorkItem { [weak self] in
-            guard let self = self else { return }
-            
-            // If we're still loading after timeout, reset state and set a fallback location name
-            if self.isLoadingLocation {
-                self.isLoadingLocation = false
-                if self.locationName == nil && self.location != nil {
-                    self.locationName = "Location found"
+            Task { @MainActor in
+                guard let self = self else { return }
+                
+                // If we're still loading after timeout, reset state and set a fallback location name
+                if self.isLoadingLocation {
+                    self.isLoadingLocation = false
+                    if self.locationName == nil && self.location != nil {
+                        self.locationName = "Location found"
+                    }
+                    self.debugMessage += "\nLocation loading timed out, resetting state"
                 }
-                self.debugMessage += "\nLocation loading timed out, resetting state"
             }
         }
         
@@ -117,39 +120,43 @@ class LocationService: NSObject, ObservableObject, CLLocationManagerDelegate {
     }
     
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        authorizationStatus = manager.authorizationStatus
-        debugMessage += "\nAuthorization changed: \(statusToString(manager.authorizationStatus))"
-        
-        #if os(macOS)
-        let isAuthorized = manager.authorizationStatus == .authorized
-        #else
-        let isAuthorized = manager.authorizationStatus == .authorizedWhenInUse || manager.authorizationStatus == .authorizedAlways
-        #endif
-        
-        if isAuthorized {
-            debugMessage += "\nAuthorized, starting location updates"
-            startUpdatingLocation()
-        } else if manager.authorizationStatus == .denied || manager.authorizationStatus == .restricted {
-            debugMessage += "\nPermission denied or restricted"
-            lastError = "Location access denied. Please enable location services for this app in Settings."
+        Task { @MainActor in
+            authorizationStatus = manager.authorizationStatus
+            debugMessage += "\nAuthorization changed: \(statusToString(manager.authorizationStatus))"
+            
+            #if os(macOS)
+            let isAuthorized = manager.authorizationStatus == .authorized
+            #else
+            let isAuthorized = manager.authorizationStatus == .authorizedWhenInUse || manager.authorizationStatus == .authorizedAlways
+            #endif
+            
+            if isAuthorized {
+                debugMessage += "\nAuthorized, starting location updates"
+                startUpdatingLocation()
+            } else if manager.authorizationStatus == .denied || manager.authorizationStatus == .restricted {
+                debugMessage += "\nPermission denied or restricted"
+                lastError = "Location access denied. Please enable location services for this app in Settings."
+            }
         }
     }
     
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        guard let newLocation = locations.last else { return }
-        
-        // Always update the user location
-        location = newLocation
-        
-        // Check if we should perform geocoding
-        let shouldGeocode = shouldPerformGeocoding(for: newLocation)
-        
-        // If we should geocode, do it
-        if shouldGeocode {
-            reverseGeocode(location: newLocation)
-        } else if !isLoadingLocation && locationName == nil {
-            // If not geocoding but we have no location name, set a reasonable default
-            locationName = "Current Location"
+        Task { @MainActor in
+            guard let newLocation = locations.last else { return }
+            
+            // Always update the user location
+            location = newLocation
+            
+            // Check if we should perform geocoding
+            let shouldGeocode = shouldPerformGeocoding(for: newLocation)
+            
+            // If we should geocode, do it
+            if shouldGeocode {
+                reverseGeocode(location: newLocation)
+            } else if !isLoadingLocation && locationName == nil {
+                // If not geocoding but we have no location name, set a reasonable default
+                locationName = "Current Location"
+            }
         }
     }
     
@@ -179,8 +186,10 @@ class LocationService: NSObject, ObservableObject, CLLocationManagerDelegate {
     }
     
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        isLoadingLocation = false
-        lastError = error.localizedDescription
+        Task { @MainActor in
+            isLoadingLocation = false
+            lastError = error.localizedDescription
+        }
     }
     
     private func reverseGeocode(location: CLLocation) {
@@ -193,51 +202,53 @@ class LocationService: NSObject, ObservableObject, CLLocationManagerDelegate {
         lastGeocodingTime = Date()
         
         geocoder.reverseGeocodeLocation(location) { [weak self] placemarks, error in
-            guard let self = self else { return }
-            
-            if let error = error {
-                // Only update error if it's not a cancellation error
-                if (error as NSError).domain != kCLErrorDomain || (error as NSError).code != CLError.geocodeCanceled.rawValue {
-                    self.lastError = error.localizedDescription
-                    self.debugMessage += "\nGeocoding error: \(error.localizedDescription)"
-                }
-                self.isLoadingLocation = false
-                return
-            }
-            
-            if let placemark = placemarks?.first {
-                // Create a meaningful location name
-                var name = ""
+            Task { @MainActor in
+                guard let self = self else { return }
                 
-                if let thoroughfare = placemark.thoroughfare {
-                    name += thoroughfare
-                }
-                
-                if let subThoroughfare = placemark.subThoroughfare {
-                    if !name.isEmpty {
-                        name += " "
+                if let error = error {
+                    // Only update error if it's not a cancellation error
+                    if (error as NSError).domain != kCLErrorDomain || (error as NSError).code != CLError.geocodeCanceled.rawValue {
+                        self.lastError = error.localizedDescription
+                        self.debugMessage += "\nGeocoding error: \(error.localizedDescription)"
                     }
-                    name += subThoroughfare
+                    self.isLoadingLocation = false
+                    return
                 }
                 
-                if name.isEmpty, let locality = placemark.locality {
-                    name = locality
-                }
-                
-                if name.isEmpty, let areaOfInterest = placemark.areasOfInterest?.first {
-                    name = areaOfInterest
-                }
-                
-                if !name.isEmpty {
-                    self.locationName = name
+                if let placemark = placemarks?.first {
+                    // Create a meaningful location name
+                    var name = ""
+                    
+                    if let thoroughfare = placemark.thoroughfare {
+                        name += thoroughfare
+                    }
+                    
+                    if let subThoroughfare = placemark.subThoroughfare {
+                        if !name.isEmpty {
+                            name += " "
+                        }
+                        name += subThoroughfare
+                    }
+                    
+                    if name.isEmpty, let locality = placemark.locality {
+                        name = locality
+                    }
+                    
+                    if name.isEmpty, let areaOfInterest = placemark.areasOfInterest?.first {
+                        name = areaOfInterest
+                    }
+                    
+                    if !name.isEmpty {
+                        self.locationName = name
+                    } else {
+                        self.locationName = "Unknown location"
+                    }
                 } else {
                     self.locationName = "Unknown location"
                 }
-            } else {
-                self.locationName = "Unknown location"
+                
+                self.isLoadingLocation = false
             }
-            
-            self.isLoadingLocation = false
         }
     }
 } 

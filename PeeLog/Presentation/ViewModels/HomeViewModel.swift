@@ -7,7 +7,9 @@
 
 import Foundation
 import SwiftUI
+import SwiftData
 
+@MainActor
 class HomeViewModel: ObservableObject {
     private let getTodaysPeeEventsUseCase: GetTodaysPeeEventsUseCase
     private let deleteEventUseCase: DeletePeeEventUseCase
@@ -17,19 +19,17 @@ class HomeViewModel: ObservableObject {
     init(getTodaysPeeEventsUseCase: GetTodaysPeeEventsUseCase, deleteEventUseCase: DeletePeeEventUseCase) {
         self.getTodaysPeeEventsUseCase = getTodaysPeeEventsUseCase
         self.deleteEventUseCase = deleteEventUseCase
-        
-        loadTodaysEvents()
     }
     
-    func loadTodaysEvents() {
-        todaysEvents = getTodaysPeeEventsUseCase.execute()
+    func loadTodaysEvents(context: ModelContext) {
+        todaysEvents = getTodaysPeeEventsUseCase.execute(context: context)
     }
     
-    func deleteEvent(at offsets: IndexSet) {
+    func deleteEvent(at offsets: IndexSet, context: ModelContext) {
         for index in offsets {
             let event = todaysEvents[index]
-            deleteEventUseCase.execute(event: event)
+            deleteEventUseCase.execute(event: event, context: context)
         }
-        loadTodaysEvents()
+        loadTodaysEvents(context: context)
     }
 } 
