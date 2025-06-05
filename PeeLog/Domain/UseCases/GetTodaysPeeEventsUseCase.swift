@@ -5,9 +5,9 @@
 //  Created by Arrinal S on 06/05/25.
 //
 
-import Foundation
+import SwiftData
 
-// Use case for getting today's events
+// Use case for fetching today's events
 class GetTodaysPeeEventsUseCase {
     private let repository: PeeEventRepository
     
@@ -15,7 +15,7 @@ class GetTodaysPeeEventsUseCase {
         self.repository = repository
     }
     
-    func execute() -> [PeeEvent] {
-        return repository.getEventsForToday()
+    func execute(context: ModelContext) -> [PeeEvent] {
+        return repository.getEventsForToday(context: context)
     }
 } 

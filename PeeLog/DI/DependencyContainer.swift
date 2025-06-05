@@ -10,18 +10,17 @@ import SwiftData
 import SwiftUI
 
 // Dependency Container class that holds all dependencies
+@MainActor
 class DependencyContainer: ObservableObject {
-    private let modelContext: ModelContext
     private let locationService: LocationService
     
-    init(modelContext: ModelContext) {
-        self.modelContext = modelContext
+    init() {
         self.locationService = LocationService()
     }
     
     // Repositories
     private lazy var peeEventRepository: PeeEventRepository = {
-        PeeEventRepositoryImpl(modelContext: modelContext)
+        PeeEventRepositoryImpl()
     }()
     
     // Use cases
@@ -64,19 +63,9 @@ class DependencyContainer: ObservableObject {
 }
 
 // Environment key for the dependency container
-struct DependencyContainerKey: EnvironmentKey {
-    static var defaultValue: DependencyContainer {
-        // Using @MainActor to safely access mainContext
-        let container: ModelContainer
-        do {
-            container = try ModelContainer(for: PeeEvent.self)
-        } catch {
-            fatalError("Failed to create ModelContainer: \(error)")
-        }
-        
-        // Create a new model context to avoid actor isolation issues
-        let context = ModelContext(container)
-        return DependencyContainer(modelContext: context)
+struct DependencyContainerKey: @preconcurrency EnvironmentKey {
+    @MainActor static var defaultValue: DependencyContainer {
+        return DependencyContainer()
     }
 }
 

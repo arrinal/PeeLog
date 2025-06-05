@@ -24,13 +24,7 @@ struct PeeLogApp: App {
     }()
 
     // State object for the container to ensure it stays alive during app lifetime
-    @StateObject private var container: DependencyContainer
-
-    // Initialize the container in init to avoid optional
-    init() {
-        let context = ModelContext(sharedModelContainer)
-        _container = StateObject(wrappedValue: DependencyContainer(modelContext: context))
-    }
+    @StateObject private var container = DependencyContainer()
 
     var body: some Scene {
         WindowGroup {

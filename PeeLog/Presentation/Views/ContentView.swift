@@ -28,8 +28,9 @@ struct ContentView: View {
 
 #Preview {
     let modelContainer = try! ModelContainer(for: PeeEvent.self)
-    let container = DependencyContainer(modelContext: modelContainer.mainContext)
+    let container = DependencyContainer()
     
     ContentView()
         .environment(\.dependencyContainer, container)
+        .modelContainer(modelContainer)
 } 
