@@ -32,4 +32,9 @@ class HomeViewModel: ObservableObject {
         }
         loadTodaysEvents(context: context)
     }
+    
+    func deleteEvent(event: PeeEvent, context: ModelContext) {
+        deleteEventUseCase.execute(event: event, context: context)
+        loadTodaysEvents(context: context)
+    }
 } 

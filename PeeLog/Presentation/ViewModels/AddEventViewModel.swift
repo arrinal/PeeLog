@@ -64,7 +64,7 @@ class AddEventViewModel: ObservableObject {
     func isFutureCombinedDateTime() -> Bool {
         let calendar = Calendar.current
         let dateComponents = calendar.dateComponents([.year, .month, .day], from: date)
-        let timeComponents = calendar.dateComponents([.hour, .minute], from: time)
+        let timeComponents = calendar.dateComponents([.hour, .minute, .second, .nanosecond], from: time)
         
         var combinedComponents = DateComponents()
         combinedComponents.year = dateComponents.year
@@ -72,6 +72,8 @@ class AddEventViewModel: ObservableObject {
         combinedComponents.day = dateComponents.day
         combinedComponents.hour = timeComponents.hour
         combinedComponents.minute = timeComponents.minute
+        combinedComponents.second = timeComponents.second
+        combinedComponents.nanosecond = timeComponents.nanosecond
         
         let combinedDateTime = calendar.date(from: combinedComponents) ?? Date()
         
@@ -79,10 +81,10 @@ class AddEventViewModel: ObservableObject {
     }
     
     func saveEvent(context: ModelContext) {
-        // Combine date and time components
+        // Combine date and time components with full precision
         let calendar = Calendar.current
         let dateComponents = calendar.dateComponents([.year, .month, .day], from: date)
-        let timeComponents = calendar.dateComponents([.hour, .minute], from: time)
+        let timeComponents = calendar.dateComponents([.hour, .minute, .second, .nanosecond], from: time)
         
         var combinedComponents = DateComponents()
         combinedComponents.year = dateComponents.year
@@ -90,6 +92,8 @@ class AddEventViewModel: ObservableObject {
         combinedComponents.day = dateComponents.day
         combinedComponents.hour = timeComponents.hour
         combinedComponents.minute = timeComponents.minute
+        combinedComponents.second = timeComponents.second
+        combinedComponents.nanosecond = timeComponents.nanosecond
         
         var combinedTimestamp = calendar.date(from: combinedComponents) ?? Date()
         
