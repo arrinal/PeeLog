@@ -16,7 +16,11 @@ final class StatisticsViewModel: ObservableObject {
     @Published var thisWeekEvents: Int = 0
     @Published var averageDaily: Double = 0.0
     @Published var healthScore: Double = 0.0
-    @Published var selectedPeriod: TimePeriod = .week
+    @Published var selectedPeriod: TimePeriod = .quarter {
+        didSet {
+            generateQualityTrends()
+        }
+    }
     
     @Published var qualityTrendData: [QualityTrendPoint] = []
     @Published var hourlyData: [HourlyData] = []
@@ -25,6 +29,18 @@ final class StatisticsViewModel: ObservableObject {
     @Published var healthInsights: [HealthInsight] = []
     
     private var allEvents: [PeeEvent] = []
+    
+    var healthScoreInterpretation: String {
+        if healthScore > 0.8 {
+            return "Excellent"
+        } else if healthScore >= 0.6 {
+            return "Good"
+        } else if healthScore >= 0.4 {
+            return "Moderate"
+        } else {
+            return "Poor"
+        }
+    }
     
     func loadStatistics(context: ModelContext) {
         loadAllEvents(context: context)
@@ -83,11 +99,15 @@ final class StatisticsViewModel: ObservableObject {
         
         switch selectedPeriod {
         case .week:
-            startDate = calendar.date(byAdding: .day, value: -7, to: now) ?? now
+            // Use start of day 7 days ago to be more inclusive
+            let sevenDaysAgo = calendar.date(byAdding: .day, value: -7, to: now) ?? now
+            startDate = calendar.startOfDay(for: sevenDaysAgo)
         case .month:
-            startDate = calendar.date(byAdding: .day, value: -30, to: now) ?? now
+            let thirtyDaysAgo = calendar.date(byAdding: .day, value: -30, to: now) ?? now
+            startDate = calendar.startOfDay(for: thirtyDaysAgo)
         case .quarter:
-            startDate = calendar.date(byAdding: .day, value: -90, to: now) ?? now
+            let ninetyDaysAgo = calendar.date(byAdding: .day, value: -90, to: now) ?? now
+            startDate = calendar.startOfDay(for: ninetyDaysAgo)
         }
         
         let filteredEvents = allEvents.filter { $0.timestamp >= startDate }
