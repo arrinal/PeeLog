@@ -40,6 +40,34 @@ class DependencyContainer: ObservableObject {
         DeletePeeEventUseCase(repository: peeEventRepository)
     }()
     
+    private lazy var getAllPeeEventsUseCase: GetAllPeeEventsUseCase = {
+        GetAllPeeEventsUseCase(repository: peeEventRepository)
+    }()
+    
+    private lazy var calculateBasicStatisticsUseCase: CalculateBasicStatisticsUseCase = {
+        CalculateBasicStatisticsUseCase(repository: peeEventRepository)
+    }()
+    
+    private lazy var generateQualityTrendsUseCase: GenerateQualityTrendsUseCase = {
+        GenerateQualityTrendsUseCase(repository: peeEventRepository)
+    }()
+    
+    private lazy var generateHealthInsightsUseCase: GenerateHealthInsightsUseCase = {
+        GenerateHealthInsightsUseCase(repository: peeEventRepository)
+    }()
+    
+    private lazy var analyzeHourlyPatternsUseCase: AnalyzeHourlyPatternsUseCase = {
+        AnalyzeHourlyPatternsUseCase(repository: peeEventRepository)
+    }()
+    
+    private lazy var generateQualityDistributionUseCase: GenerateQualityDistributionUseCase = {
+        GenerateQualityDistributionUseCase(repository: peeEventRepository)
+    }()
+    
+    private lazy var generateWeeklyDataUseCase: GenerateWeeklyDataUseCase = {
+        GenerateWeeklyDataUseCase(repository: peeEventRepository)
+    }()
+    
     // View models
     func makeHomeViewModel() -> HomeViewModel {
         HomeViewModel(
@@ -62,7 +90,15 @@ class DependencyContainer: ObservableObject {
     }
     
     func makeStatisticsViewModel() -> StatisticsViewModel {
-        StatisticsViewModel()
+        StatisticsViewModel(
+            getAllEventsUseCase: getAllPeeEventsUseCase,
+            calculateStatisticsUseCase: calculateBasicStatisticsUseCase,
+            generateQualityTrendsUseCase: generateQualityTrendsUseCase,
+            generateHealthInsightsUseCase: generateHealthInsightsUseCase,
+            analyzeHourlyPatternsUseCase: analyzeHourlyPatternsUseCase,
+            generateQualityDistributionUseCase: generateQualityDistributionUseCase,
+            generateWeeklyDataUseCase: generateWeeklyDataUseCase
+        )
     }
 }
 
