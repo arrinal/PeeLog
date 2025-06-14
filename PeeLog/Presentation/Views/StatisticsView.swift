@@ -78,7 +78,8 @@ struct StatisticsView: View {
                     value: "\(Int(viewModel.healthScore * 100))%",
                     subtitle: "Hydration level",
                     color: viewModel.healthScore > 0.7 ? .green : viewModel.healthScore > 0.4 ? .orange : .red,
-                    icon: "heart.circle.fill"
+                    icon: "heart.circle.fill",
+                    interpretation: viewModel.healthScoreInterpretation
                 )
             }
         }
@@ -283,6 +284,16 @@ struct StatisticCard: View {
     let subtitle: String
     let color: Color
     let icon: String
+    let interpretation: String?
+    
+    init(title: String, value: String, subtitle: String, color: Color, icon: String, interpretation: String? = nil) {
+        self.title = title
+        self.value = value
+        self.subtitle = subtitle
+        self.color = color
+        self.icon = icon
+        self.interpretation = interpretation
+    }
     
     var body: some View {
         VStack(spacing: 12) {
@@ -290,7 +301,22 @@ struct StatisticCard: View {
                 Image(systemName: icon)
                     .font(.title2)
                     .foregroundColor(color)
-                Spacer()
+                
+                if let interpretation = interpretation {
+                    Spacer()
+                    Text(interpretation)
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundColor(color)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 2)
+                        .background(
+                            Capsule()
+                                .fill(color.opacity(0.2))
+                        )
+                } else {
+                    Spacer()
+                }
             }
             
             VStack(alignment: .leading, spacing: 4) {
@@ -304,9 +330,11 @@ struct StatisticCard: View {
                     .fontWeight(.medium)
                     .foregroundColor(.primary)
                 
-                Text(subtitle)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                if !subtitle.isEmpty {
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
