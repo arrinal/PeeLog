@@ -16,6 +16,15 @@ class GetAllPeeEventsUseCase {
     }
     
     func execute(context: ModelContext) -> [PeeEvent] {
-        return repository.getAllEvents(context: context)
+        let descriptor = FetchDescriptor<PeeEvent>(
+            sortBy: [SortDescriptor(\.timestamp, order: .reverse)]
+        )
+        
+        do {
+            return try context.fetch(descriptor)
+        } catch {
+            print("Failed to fetch events: \(error)")
+            return []
+        }
     }
 } 
