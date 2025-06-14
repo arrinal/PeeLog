@@ -60,6 +60,10 @@ class DependencyContainer: ObservableObject {
             locationService: locationService
         )
     }
+    
+    func makeStatisticsViewModel() -> StatisticsViewModel {
+        StatisticsViewModel()
+    }
 }
 
 // Environment key for the dependency container
