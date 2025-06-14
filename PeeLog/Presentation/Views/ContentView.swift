@@ -22,6 +22,11 @@ struct ContentView: View {
                 .tabItem {
                     Label("Map", systemImage: "map.fill")
                 }
+            
+            StatisticsView(viewModel: container.makeStatisticsViewModel())
+                .tabItem {
+                    Label("Statistics", systemImage: "chart.bar.fill")
+                }
         }
     }
 }
