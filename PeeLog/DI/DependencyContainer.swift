@@ -12,14 +12,22 @@ import SwiftUI
 // Dependency Container class that holds all dependencies
 @MainActor
 class DependencyContainer: ObservableObject {
+    // MARK: - Core Services
     private let locationService: LocationService
+    private let locationRepository: LocationRepository
+    private let errorHandlingUseCase: ErrorHandlingUseCase
+    
+    // MARK: - Repository Cache
     private var peeEventRepository: PeeEventRepository?
     
     init() {
+        // Initialize core services
         self.locationService = LocationService()
+        self.locationRepository = LocationRepositoryImpl(locationService: locationService)
+        self.errorHandlingUseCase = ErrorHandlingUseCaseImpl()
     }
     
-    // Repository factory method
+    // MARK: - Repository Factory Methods
     private func getPeeEventRepository(modelContext: ModelContext) -> PeeEventRepository {
         if let repository = peeEventRepository {
             return repository
@@ -29,7 +37,17 @@ class DependencyContainer: ObservableObject {
         return repository
     }
     
-    // View models
+    // MARK: - Location Repository Access
+    func getLocationRepository() -> LocationRepository {
+        return locationRepository
+    }
+    
+    // MARK: - Error Handling Use Case Access
+    func getErrorHandlingUseCase() -> ErrorHandlingUseCase {
+        return errorHandlingUseCase
+    }
+    
+    // MARK: - View Model Factory Methods
     func makeHomeViewModel(modelContext: ModelContext) -> HomeViewModel {
         let repository = getPeeEventRepository(modelContext: modelContext)
         return HomeViewModel(
@@ -49,7 +67,8 @@ class DependencyContainer: ObservableObject {
         let repository = getPeeEventRepository(modelContext: modelContext)
         return AddEventViewModel(
             addPeeEventUseCase: AddPeeEventUseCase(repository: repository),
-            locationService: locationService
+            locationRepository: locationRepository,
+            errorHandlingUseCase: errorHandlingUseCase
         )
     }
     
