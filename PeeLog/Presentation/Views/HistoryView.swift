@@ -195,10 +195,8 @@ struct HistoryView: View {
         .sheet(isPresented: $showingMapSheet, onDismiss: {
             selectedEvent = nil
         }) {
-            if let event = selectedEvent {
-                LocationMapView(event: event)
-                    .ignoresSafeArea(.container, edges: .top)
-            }
+            LocationMapView(event: selectedEvent)
+                .ignoresSafeArea(.container, edges: .top)
         }
         .sheet(isPresented: $showingFilterSheet) {
             FilterSheet(
@@ -207,6 +205,11 @@ struct HistoryView: View {
                 customEndDate: $customEndDate,
                 isPresented: $showingFilterSheet
             )
+        }
+        .onChange(of: selectedEvent) { oldValue, newValue in
+            if let event = newValue, event.hasLocation {
+                showingMapSheet = true
+            }
         }
     }
     
