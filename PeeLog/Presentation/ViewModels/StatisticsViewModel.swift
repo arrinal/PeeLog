@@ -71,8 +71,8 @@ final class StatisticsViewModel: ObservableObject {
         }
     }
     
-    func loadStatistics(context: ModelContext) {
-        loadAllEvents(context: context)
+    func loadStatistics() {
+        loadAllEvents()
         calculateBasicStatistics()
         generateQualityTrends()
         generateHourlyPatterns()
@@ -82,8 +82,8 @@ final class StatisticsViewModel: ObservableObject {
     }
     
     // MARK: - Private Methods
-    private func loadAllEvents(context: ModelContext) {
-        allEvents = getAllEventsUseCase.execute(context: context)
+    private func loadAllEvents() {
+        allEvents = getAllEventsUseCase.execute()
     }
     
     private func calculateBasicStatistics() {
@@ -132,3 +132,4 @@ extension PeeQuality {
         }
     }
 } 
+ 

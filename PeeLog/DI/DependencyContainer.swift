@@ -13,91 +13,56 @@ import SwiftUI
 @MainActor
 class DependencyContainer: ObservableObject {
     private let locationService: LocationService
+    private var peeEventRepository: PeeEventRepository?
     
     init() {
         self.locationService = LocationService()
     }
     
-    // Repositories
-    private lazy var peeEventRepository: PeeEventRepository = {
-        PeeEventRepositoryImpl()
-    }()
-    
-    // Use cases
-    private lazy var getTodaysPeeEventsUseCase: GetTodaysPeeEventsUseCase = {
-        GetTodaysPeeEventsUseCase(repository: peeEventRepository)
-    }()
-    
-    private lazy var getPeeEventsWithLocationUseCase: GetPeeEventsWithLocationUseCase = {
-        GetPeeEventsWithLocationUseCase(repository: peeEventRepository)
-    }()
-    
-    private lazy var addPeeEventUseCase: AddPeeEventUseCase = {
-        AddPeeEventUseCase(repository: peeEventRepository)
-    }()
-    
-    private lazy var deletePeeEventUseCase: DeletePeeEventUseCase = {
-        DeletePeeEventUseCase(repository: peeEventRepository)
-    }()
-    
-    private lazy var getAllPeeEventsUseCase: GetAllPeeEventsUseCase = {
-        GetAllPeeEventsUseCase(repository: peeEventRepository)
-    }()
-    
-    private lazy var calculateBasicStatisticsUseCase: CalculateBasicStatisticsUseCase = {
-        CalculateBasicStatisticsUseCase(repository: peeEventRepository)
-    }()
-    
-    private lazy var generateQualityTrendsUseCase: GenerateQualityTrendsUseCase = {
-        GenerateQualityTrendsUseCase(repository: peeEventRepository)
-    }()
-    
-    private lazy var generateHealthInsightsUseCase: GenerateHealthInsightsUseCase = {
-        GenerateHealthInsightsUseCase(repository: peeEventRepository)
-    }()
-    
-    private lazy var analyzeHourlyPatternsUseCase: AnalyzeHourlyPatternsUseCase = {
-        AnalyzeHourlyPatternsUseCase(repository: peeEventRepository)
-    }()
-    
-    private lazy var generateQualityDistributionUseCase: GenerateQualityDistributionUseCase = {
-        GenerateQualityDistributionUseCase(repository: peeEventRepository)
-    }()
-    
-    private lazy var generateWeeklyDataUseCase: GenerateWeeklyDataUseCase = {
-        GenerateWeeklyDataUseCase(repository: peeEventRepository)
-    }()
+    // Repository factory method
+    private func getPeeEventRepository(modelContext: ModelContext) -> PeeEventRepository {
+        if let repository = peeEventRepository {
+            return repository
+        }
+        let repository = PeeEventRepositoryImpl(modelContext: modelContext)
+        self.peeEventRepository = repository
+        return repository
+    }
     
     // View models
-    func makeHomeViewModel() -> HomeViewModel {
-        HomeViewModel(
-            getTodaysPeeEventsUseCase: getTodaysPeeEventsUseCase,
-            deleteEventUseCase: deletePeeEventUseCase
+    func makeHomeViewModel(modelContext: ModelContext) -> HomeViewModel {
+        let repository = getPeeEventRepository(modelContext: modelContext)
+        return HomeViewModel(
+            getTodaysPeeEventsUseCase: GetTodaysPeeEventsUseCase(repository: repository),
+            deleteEventUseCase: DeletePeeEventUseCase(repository: repository)
         )
     }
     
-    func makeMapHistoryViewModel() -> MapHistoryViewModel {
-        MapHistoryViewModel(
-            getPeeEventsWithLocationUseCase: getPeeEventsWithLocationUseCase
+    func makeMapHistoryViewModel(modelContext: ModelContext) -> MapHistoryViewModel {
+        let repository = getPeeEventRepository(modelContext: modelContext)
+        return MapHistoryViewModel(
+            getPeeEventsWithLocationUseCase: GetPeeEventsWithLocationUseCase(repository: repository)
         )
     }
     
-    func makeAddEventViewModel() -> AddEventViewModel {
-        AddEventViewModel(
-            addPeeEventUseCase: addPeeEventUseCase,
+    func makeAddEventViewModel(modelContext: ModelContext) -> AddEventViewModel {
+        let repository = getPeeEventRepository(modelContext: modelContext)
+        return AddEventViewModel(
+            addPeeEventUseCase: AddPeeEventUseCase(repository: repository),
             locationService: locationService
         )
     }
     
-    func makeStatisticsViewModel() -> StatisticsViewModel {
-        StatisticsViewModel(
-            getAllEventsUseCase: getAllPeeEventsUseCase,
-            calculateStatisticsUseCase: calculateBasicStatisticsUseCase,
-            generateQualityTrendsUseCase: generateQualityTrendsUseCase,
-            generateHealthInsightsUseCase: generateHealthInsightsUseCase,
-            analyzeHourlyPatternsUseCase: analyzeHourlyPatternsUseCase,
-            generateQualityDistributionUseCase: generateQualityDistributionUseCase,
-            generateWeeklyDataUseCase: generateWeeklyDataUseCase
+    func makeStatisticsViewModel(modelContext: ModelContext) -> StatisticsViewModel {
+        let repository = getPeeEventRepository(modelContext: modelContext)
+        return StatisticsViewModel(
+            getAllEventsUseCase: GetAllPeeEventsUseCase(repository: repository),
+            calculateStatisticsUseCase: CalculateBasicStatisticsUseCase(repository: repository),
+            generateQualityTrendsUseCase: GenerateQualityTrendsUseCase(repository: repository),
+            generateHealthInsightsUseCase: GenerateHealthInsightsUseCase(repository: repository),
+            analyzeHourlyPatternsUseCase: AnalyzeHourlyPatternsUseCase(repository: repository),
+            generateQualityDistributionUseCase: GenerateQualityDistributionUseCase(repository: repository),
+            generateWeeklyDataUseCase: GenerateWeeklyDataUseCase(repository: repository)
         )
     }
 }

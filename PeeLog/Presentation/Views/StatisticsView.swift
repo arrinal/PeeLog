@@ -30,11 +30,11 @@ struct StatisticsView: View {
             }
             .navigationTitle("Statistics")
             .refreshable {
-                viewModel.loadStatistics(context: modelContext)
+                viewModel.loadStatistics()
             }
         }
         .onAppear {
-            viewModel.loadStatistics(context: modelContext)
+            viewModel.loadStatistics()
         }
     }
     
@@ -405,7 +405,8 @@ struct HealthInsightCard: View {
     let container = try! ModelContainer(for: PeeEvent.self)
     let dependencyContainer = DependencyContainer()
     
-    StatisticsView(viewModel: dependencyContainer.makeStatisticsViewModel())
+    StatisticsView(viewModel: dependencyContainer.makeStatisticsViewModel(modelContext: container.mainContext))
         .modelContainer(container)
         .environment(\.dependencyContainer, dependencyContainer)
 } 
+ 

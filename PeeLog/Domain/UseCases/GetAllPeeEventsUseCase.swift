@@ -5,9 +5,10 @@
 //  Created by Arrinal S on 06/05/25.
 //
 
-import SwiftData
+import Foundation
 
 // Use case for fetching all events
+@MainActor
 class GetAllPeeEventsUseCase {
     private let repository: PeeEventRepository
     
@@ -15,16 +16,7 @@ class GetAllPeeEventsUseCase {
         self.repository = repository
     }
     
-    func execute(context: ModelContext) -> [PeeEvent] {
-        let descriptor = FetchDescriptor<PeeEvent>(
-            sortBy: [SortDescriptor(\.timestamp, order: .reverse)]
-        )
-        
-        do {
-            return try context.fetch(descriptor)
-        } catch {
-            print("Failed to fetch events: \(error)")
-            return []
-        }
+    func execute() -> [PeeEvent] {
+        return repository.getAllEvents()
     }
 } 

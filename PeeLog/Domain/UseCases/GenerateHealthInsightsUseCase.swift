@@ -9,6 +9,7 @@ import Foundation
 import SwiftUI
 
 // Use case for generating health insights
+@MainActor
 class GenerateHealthInsightsUseCase {
     private let repository: PeeEventRepository
     

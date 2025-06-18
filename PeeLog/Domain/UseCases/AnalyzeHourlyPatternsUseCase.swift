@@ -8,6 +8,7 @@
 import Foundation
 
 // Use case for analyzing hourly patterns
+@MainActor
 class AnalyzeHourlyPatternsUseCase {
     private let repository: PeeEventRepository
     

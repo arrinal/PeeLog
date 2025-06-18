@@ -8,6 +8,7 @@
 import Foundation
 
 // Use case for calculating basic statistics
+@MainActor
 class CalculateBasicStatisticsUseCase {
     private let repository: PeeEventRepository
     

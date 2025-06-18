@@ -8,6 +8,7 @@
 import Foundation
 
 // Use case for generating quality trends
+@MainActor
 class GenerateQualityTrendsUseCase {
     private let repository: PeeEventRepository
     

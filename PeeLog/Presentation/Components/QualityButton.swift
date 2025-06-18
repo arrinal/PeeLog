@@ -16,8 +16,8 @@ struct QualityButton: View {
         Button(action: action) {
             VStack(spacing: 10) {
                 ZStack {
-                    Circle()
-                        .fill(quality.color)
+                Circle()
+                    .fill(quality.color)
                         .frame(width: 50, height: 50)
                         .shadow(
                             color: isSelected ? quality.color.opacity(0.6) : quality.color.opacity(0.3), 
@@ -25,14 +25,14 @@ struct QualityButton: View {
                             x: 0, 
                             y: isSelected ? 5 : 3
                         )
-                        .overlay(
-                            Circle()
+                    .overlay(
+                        Circle()
                                 .stroke(
                                     isSelected ? Color.blue : Color.clear, 
                                     lineWidth: isSelected ? 3 : 0
                                 )
-                        )
-                    
+                    )
+                
                     Text(quality.emoji)
                         .font(.system(size: 20))
                         .scaleEffect(isSelected ? 1.1 : 1.0)
@@ -73,11 +73,11 @@ struct QualityButton_Previews: PreviewProvider {
     static var previews: some View {
         VStack(spacing: 20) {
             HStack(spacing: 16) {
-                QualityButton(quality: .clear, isSelected: true, action: {})
-                QualityButton(quality: .paleYellow, isSelected: false, action: {})
-                QualityButton(quality: .yellow, isSelected: false, action: {})
-                QualityButton(quality: .darkYellow, isSelected: false, action: {})
-                QualityButton(quality: .amber, isSelected: false, action: {})
+            QualityButton(quality: .clear, isSelected: true, action: {})
+            QualityButton(quality: .paleYellow, isSelected: false, action: {})
+            QualityButton(quality: .yellow, isSelected: false, action: {})
+            QualityButton(quality: .darkYellow, isSelected: false, action: {})
+            QualityButton(quality: .amber, isSelected: false, action: {})
             }
             
             HStack(spacing: 16) {
