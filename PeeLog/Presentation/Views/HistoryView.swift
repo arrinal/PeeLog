@@ -123,31 +123,31 @@ struct HistoryView: View {
                     .padding(.top, 10)
                     
                     // Events Content
-                    if filteredEvents.isEmpty {
+            if filteredEvents.isEmpty {
                         // Empty State Card
                         VStack(spacing: 20) {
                             Image(systemName: "calendar.circle")
                                 .font(.system(size: 48, weight: .light))
                                 .foregroundColor(.blue.opacity(0.6))
-                            
+                                
                             VStack(spacing: 8) {
                                 Text("No events found")
                                     .font(.system(size: 20, weight: .semibold))
                                     .foregroundColor(.primary)
                                 Text("Try adjusting your filter settings")
                                     .font(.system(size: 14))
-                                    .foregroundColor(.secondary)
-                            }
-                            
-                            Button(action: {
+                                            .foregroundColor(.secondary)
+                                    }
+                                    
+                                        Button(action: {
                                 showingFilterSheet = true
-                            }) {
-                                HStack {
+                                        }) {
+                                            HStack {
                                     Image(systemName: "slider.horizontal.3")
                                     Text("Change Filter")
                                 }
                                 .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(.blue)
+                                                    .foregroundColor(.blue)
                                 .padding(.horizontal, 20)
                                 .padding(.vertical, 12)
                                 .background(

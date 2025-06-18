@@ -80,7 +80,7 @@ class AddEventViewModel: ObservableObject {
         return combinedDateTime > Date()
     }
     
-    func saveEvent(context: ModelContext) {
+    func saveEvent() {
         // Combine date and time components with full precision
         let calendar = Calendar.current
         let dateComponents = calendar.dateComponents([.year, .month, .day], from: date)
@@ -123,7 +123,11 @@ class AddEventViewModel: ObservableObject {
             )
         }
         
-        addPeeEventUseCase.execute(event: newEvent, context: context)
+        do {
+            try addPeeEventUseCase.execute(event: newEvent)
+        } catch {
+            print("Error saving event: \(error)")
+        }
     }
     
     func requestLocationPermission() {

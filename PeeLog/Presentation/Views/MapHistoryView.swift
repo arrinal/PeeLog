@@ -16,13 +16,14 @@ struct MapHistoryView: View {
     @State private var showingPopup = false
     @State private var popupPosition: CGPoint = .zero
     @State private var mapCameraPosition: MapCameraPosition = .automatic
+    @State private var selectedAnnotation: PeeEvent? = nil
     
     var body: some View {
         NavigationStack {
             mapViewContent
         }
         .onAppear {
-            viewModel.loadEventsWithLocation(context: modelContext)
+            viewModel.loadEventsWithLocation()
             mapCameraPosition = viewModel.mapCameraPosition
         }
         .onChange(of: viewModel.mapCameraPosition) { oldValue, newValue in
@@ -45,7 +46,7 @@ struct MapHistoryView: View {
     }
     
     private var mainMapView: some View {
-        Map(position: $mapCameraPosition, selection: $viewModel.selectedEvent) {
+        Map(position: $mapCameraPosition) {
             mapAnnotations
         }
         .mapControls {
@@ -54,6 +55,18 @@ struct MapHistoryView: View {
         }
         .onMapCameraChange { context in
             mapCameraPosition = .camera(context.camera)
+        }
+        .onTapGesture { location in
+            // iOS 18 fix: Close popup when tapping map background
+            if showingPopup {
+                Task { @MainActor in
+                    // Small delay to prevent conflicts with pin tap
+                    try? await Task.sleep(nanoseconds: 50_000_000) // 0.05 second delay
+                    if showingPopup { // Check again after delay
+                        closePopup()
+                    }
+                }
+            }
         }
     }
     
@@ -72,10 +85,11 @@ struct MapHistoryView: View {
     }
     
     private func pinView(for event: PeeEvent) -> some View {
-        PeeMapPin(event: event, isSelected: viewModel.selectedEvent?.id == event.id)
+        PeeMapPin(event: event, isSelected: selectedAnnotation?.id == event.id)
             .onTapGesture {
                 handlePinTap(event: event)
             }
+            .allowsHitTesting(true) // iOS 18 fix: Ensure pin can receive taps
     }
     
     @ViewBuilder
@@ -90,29 +104,45 @@ struct MapHistoryView: View {
                 insertion: .scale(scale: 0.8).combined(with: .opacity),
                 removal: .scale(scale: 0.8).combined(with: .opacity)
             ))
+            .allowsHitTesting(true) // iOS 18 fix: Ensure popup can receive taps
+            .zIndex(1000) // iOS 18 fix: Ensure popup stays on top
         }
     }
     
     private var bottomInfoView: some View {
-        VStack {
-            Spacer()
-            Text("\(viewModel.eventsWithLocation.count) events on map")
-                .font(.caption)
-                .padding(8)
-                .background(.ultraThinMaterial)
-                .cornerRadius(8)
-                .padding(.bottom, 8)
-        }
-    }
+                VStack {
+                    Spacer()
+                    Text("\(viewModel.eventsWithLocation.count) events on map")
+                        .font(.caption)
+                        .padding(8)
+                        .background(.ultraThinMaterial)
+                        .cornerRadius(8)
+                        .padding(.bottom, 8)
+                }
+            }
     
     private func handlePinTap(event: PeeEvent) {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-            if viewModel.selectedEvent?.id == event.id {
-                viewModel.selectedEvent = nil
-                showingPopup = false
-            } else {
-                viewModel.selectedEvent = event
-                showingPopup = true
+        // iOS 18 fix: Prevent rapid state changes and conflicts
+        if showingPopup && selectedAnnotation?.id == event.id {
+            // Already showing popup for this event, close it
+            closePopup()
+        } else {
+            // iOS 18 fix: Use async task to prevent immediate dismissal
+            Task { @MainActor in
+                // Close any existing popup first
+                if showingPopup {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        showingPopup = false
+                    }
+                    try? await Task.sleep(nanoseconds: 150_000_000) // 0.15 second delay
+                }
+                
+                // Set new selection and show popup
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    viewModel.selectedEvent = event
+                    selectedAnnotation = event
+                    showingPopup = true
+                }
             }
         }
     }
@@ -120,7 +150,12 @@ struct MapHistoryView: View {
     private func closePopup() {
         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
             showingPopup = false
+        }
+        
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 200_000_000)
             viewModel.selectedEvent = nil
+            selectedAnnotation = nil
         }
     }
 }
@@ -325,8 +360,8 @@ struct PeeEventPopup: View {
             }
             
             Spacer(minLength: 100)
+            }
         }
-    }
 }
 
 // MARK: - Triangle Shape for Popup Pointer
@@ -345,9 +380,9 @@ struct Triangle: Shape {
 
 #Preview {
     let container = try! ModelContainer(for: PeeEvent.self)
-    let repository = PeeEventRepositoryImpl()
-    let useCase = GetPeeEventsWithLocationUseCase(repository: repository)
+    let dependencyContainer = DependencyContainer()
     
-    MapHistoryView(viewModel: MapHistoryViewModel(getPeeEventsWithLocationUseCase: useCase))
+    MapHistoryView(viewModel: dependencyContainer.makeMapHistoryViewModel(modelContext: container.mainContext))
         .modelContainer(container)
+        .environment(\.dependencyContainer, dependencyContainer)
 } 

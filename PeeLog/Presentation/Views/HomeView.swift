@@ -137,21 +137,21 @@ struct HomeView: View {
                                         EventCard(
                                             event: event,
                                             onLocationTap: {
-                                                selectedEvent = event
-                                                showingMapSheet = true
+                                            selectedEvent = event
+                                            showingMapSheet = true
                                             },
                                             onDelete: {
                                                 withAnimation(.spring(dampingFraction: 0.8)) {
-                                                    viewModel.deleteEvent(event: event, context: modelContext)
+                                                    viewModel.deleteEvent(event: event)
                                                 }
                                             }
                                         )
                                         .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                                            }
+                                        }
+                                .padding(.horizontal, 20)
                                     }
                                 }
-                                .padding(.horizontal, 20)
-                            }
-                        }
                     }
                     .padding(.bottom, 100) // Space for FAB
                 }
@@ -195,7 +195,7 @@ struct HomeView: View {
             .navigationTitle("")
             .navigationBarHidden(true)
             .sheet(isPresented: $showingAddEventSheet) {
-                viewModel.loadTodaysEvents(context: modelContext)
+                viewModel.loadTodaysEvents()
             } content: {
                 AddEventView()
             }
@@ -212,7 +212,7 @@ struct HomeView: View {
             }
         }
         .onAppear {
-            viewModel.loadTodaysEvents(context: modelContext)
+            viewModel.loadTodaysEvents()
         }
     }
 }
@@ -360,7 +360,7 @@ struct EventCard: View {
                                 let resistance = min(excessDistance / (screenWidth * 0.25), 1.0)
                                 let resistedDistance = excessDistance * (1.0 - resistance * 0.7)
                                 offset = -(deleteThreshold + resistedDistance)
-                            }
+        }
                         }
                     }
                     .onEnded { value in
@@ -397,15 +397,11 @@ struct EventCard: View {
 
 #Preview {
     let container = try! ModelContainer(for: PeeEvent.self)
-    let repository = PeeEventRepositoryImpl()
-    let todaysUseCase = GetTodaysPeeEventsUseCase(repository: repository)
-    let deleteUseCase = DeletePeeEventUseCase(repository: repository)
+    let dependencyContainer = DependencyContainer()
     
-    HomeView(viewModel: HomeViewModel(
-        getTodaysPeeEventsUseCase: todaysUseCase,
-        deleteEventUseCase: deleteUseCase
-    ))
-    .modelContainer(container)
+    HomeView(viewModel: dependencyContainer.makeHomeViewModel(modelContext: container.mainContext))
+        .modelContainer(container)
+        .environment(\.dependencyContainer, dependencyContainer)
 } 
 
 
@@ -473,4 +469,4 @@ struct RoundedCorner: Shape {
         )
         return Path(path.cgPath)
     }
-}
+} 

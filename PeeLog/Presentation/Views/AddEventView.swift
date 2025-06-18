@@ -15,12 +15,14 @@ struct AddEventView: View {
     @Environment(\.dependencyContainer) private var container
     @Environment(\.modelContext) private var modelContext
     
-    @StateObject private var viewModel: AddEventViewModel
-    
-    init() {
-        let container = DependencyContainer()
-        _viewModel = StateObject(wrappedValue: container.makeAddEventViewModel())
+    var body: some View {
+        AddEventViewContent(viewModel: container.makeAddEventViewModel(modelContext: modelContext))
     }
+}
+
+struct AddEventViewContent: View {
+    @Environment(\.dismiss) private var dismiss
+    @StateObject private var viewModel: AddEventViewModel
     
     init(viewModel: AddEventViewModel) {
         _viewModel = StateObject(wrappedValue: viewModel)
@@ -231,11 +233,25 @@ struct AddEventView: View {
                                                         .foregroundColor(.primary)
                                                 }
                                                 Spacer()
-                }
+                                            }
                                             .padding(16)
                                             .background(
                                                 RoundedRectangle(cornerRadius: 12)
                                                     .fill(Color.green.opacity(0.05))
+                                            )
+                                        } else {
+                                            HStack(spacing: 12) {
+                                                Image(systemName: "location.circle")
+                                                    .foregroundColor(.secondary)
+                                                Text("Location not available")
+                                                    .font(.system(size: 14, weight: .medium))
+                                                    .foregroundColor(.secondary)
+                                                Spacer()
+                                            }
+                                            .padding(16)
+                                            .background(
+                                                RoundedRectangle(cornerRadius: 12)
+                                                    .fill(Color.gray.opacity(0.05))
                                             )
                                         }
                                     }
@@ -279,7 +295,7 @@ struct AddEventView: View {
                                                 .navigationTitle("Event Location")
                                                 .navigationBarTitleDisplayMode(.inline)
                                                 .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
+                                                    ToolbarItem(placement: .navigationBarTrailing) {
                                                         Button("Done") {
                                                             showingMapInForm = false
                                                         }
@@ -343,7 +359,7 @@ struct AddEventView: View {
                         VStack(spacing: 12) {
                             Button(action: {
                                 withAnimation(.spring(dampingFraction: 0.7)) {
-                                    viewModel.saveEvent(context: modelContext)
+                                    viewModel.saveEvent()
                                     dismiss()
                                 }
                             }) {
@@ -376,8 +392,8 @@ struct AddEventView: View {
                             
                             Button(action: {
                                 withAnimation(.spring(dampingFraction: 0.7)) {
-                        dismiss()
-                    }
+                                    dismiss()
+                                }
                             }) {
                                 Text("Cancel")
                                     .font(.system(size: 16, weight: .medium))

@@ -5,9 +5,10 @@
 //  Created by Arrinal S on 06/05/25.
 //
 
-import SwiftData
+import Foundation
 
 // Use case for fetching events with location data
+@MainActor
 class GetPeeEventsWithLocationUseCase {
     private let repository: PeeEventRepository
     
@@ -15,8 +16,8 @@ class GetPeeEventsWithLocationUseCase {
         self.repository = repository
     }
     
-    func execute(context: ModelContext) -> [PeeEvent] {
-        return repository.getAllEvents(context: context).filter { event in
+    func execute() -> [PeeEvent] {
+        return repository.getAllEvents().filter { event in
             event.latitude != nil && event.longitude != nil
         }
     }

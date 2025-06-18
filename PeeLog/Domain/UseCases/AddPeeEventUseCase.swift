@@ -5,9 +5,10 @@
 //  Created by Arrinal S on 06/05/25.
 //
 
-import SwiftData
+import Foundation
 
 // Use case for adding a new event
+@MainActor
 class AddPeeEventUseCase {
     private let repository: PeeEventRepository
     
@@ -15,7 +16,7 @@ class AddPeeEventUseCase {
         self.repository = repository
     }
     
-    func execute(event: PeeEvent, context: ModelContext) {
-        repository.addEvent(event, context: context)
+    func execute(event: PeeEvent) throws {
+        try repository.addEvent(event)
     }
 } 

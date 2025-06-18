@@ -21,20 +21,28 @@ class HomeViewModel: ObservableObject {
         self.deleteEventUseCase = deleteEventUseCase
     }
     
-    func loadTodaysEvents(context: ModelContext) {
-        todaysEvents = getTodaysPeeEventsUseCase.execute(context: context)
+    func loadTodaysEvents() {
+        todaysEvents = getTodaysPeeEventsUseCase.execute()
     }
     
-    func deleteEvent(at offsets: IndexSet, context: ModelContext) {
+    func deleteEvent(at offsets: IndexSet) {
         for index in offsets {
             let event = todaysEvents[index]
-            deleteEventUseCase.execute(event: event, context: context)
+            do {
+                try deleteEventUseCase.execute(event: event)
+            } catch {
+                print("Error deleting event: \(error)")
+            }
         }
-        loadTodaysEvents(context: context)
+        loadTodaysEvents()
     }
     
-    func deleteEvent(event: PeeEvent, context: ModelContext) {
-        deleteEventUseCase.execute(event: event, context: context)
-        loadTodaysEvents(context: context)
+    func deleteEvent(event: PeeEvent) {
+        do {
+            try deleteEventUseCase.execute(event: event)
+        } catch {
+            print("Error deleting event: \(error)")
+        }
+        loadTodaysEvents()
     }
 } 

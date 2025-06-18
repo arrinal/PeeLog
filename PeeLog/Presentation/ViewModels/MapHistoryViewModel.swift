@@ -22,8 +22,8 @@ class MapHistoryViewModel: ObservableObject {
         self.getPeeEventsWithLocationUseCase = getPeeEventsWithLocationUseCase
     }
     
-    func loadEventsWithLocation(context: ModelContext) {
-        eventsWithLocation = getPeeEventsWithLocationUseCase.execute(context: context)
+    func loadEventsWithLocation() {
+        eventsWithLocation = getPeeEventsWithLocationUseCase.execute()
     }
     
     func selectEvent(_ event: PeeEvent) {

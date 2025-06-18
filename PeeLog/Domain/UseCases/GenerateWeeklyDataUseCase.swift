@@ -9,6 +9,7 @@ import Foundation
 import SwiftUI
 
 // Use case for generating weekly data
+@MainActor
 class GenerateWeeklyDataUseCase {
     private let repository: PeeEventRepository
     

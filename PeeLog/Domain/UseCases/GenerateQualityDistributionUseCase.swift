@@ -8,6 +8,7 @@
 import Foundation
 
 // Use case for generating quality distribution
+@MainActor
 class GenerateQualityDistributionUseCase {
     private let repository: PeeEventRepository
     
