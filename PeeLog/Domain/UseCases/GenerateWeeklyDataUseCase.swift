@@ -51,14 +51,16 @@ struct WeeklyData {
     let averageQuality: Double
     
     var qualityColor: Color {
-        if averageQuality >= 4.0 {
-            return .green
+        if count == 0 {
+            return Color(.systemGray4) // No data
+        } else if averageQuality >= 4.0 {
+            return .green // Excellent
         } else if averageQuality >= 3.0 {
-            return .yellow
+            return .yellow // Good
         } else if averageQuality >= 2.0 {
-            return .orange
+            return .orange // Fair
         } else {
-            return .red
+            return .red // Poor
         }
     }
     

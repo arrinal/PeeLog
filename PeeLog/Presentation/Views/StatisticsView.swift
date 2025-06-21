@@ -331,13 +331,66 @@ struct StatisticsView: View {
                                 .fontWeight(.bold)
                                 .foregroundColor(.white)
                         }
-                        
-                        Text(dayData.averageQualityText)
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
                     }
                 }
             }
+            
+            // Color legend
+            VStack(spacing: 8) {
+                HStack(spacing: 16) {
+                    HStack(spacing: 6) {
+                        Circle()
+                            .fill(Color(.systemGray4))
+                            .frame(width: 12, height: 12)
+                        Text("No data")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    HStack(spacing: 6) {
+                        Circle()
+                            .fill(Color.red)
+                            .frame(width: 12, height: 12)
+                        Text("Poor hydration")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    HStack(spacing: 6) {
+                        Circle()
+                            .fill(Color.orange)
+                            .frame(width: 12, height: 12)
+                        Text("Fair hydration")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    Spacer()
+                }
+                
+                HStack(spacing: 16) {
+                    HStack(spacing: 6) {
+                        Circle()
+                            .fill(Color.yellow)
+                            .frame(width: 12, height: 12)
+                        Text("Good hydration")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    HStack(spacing: 6) {
+                        Circle()
+                            .fill(Color.green)
+                            .frame(width: 12, height: 12)
+                        Text("Excellent hydration")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    Spacer()
+                }
+            }
+            .padding(.top, 8)
         }
         .padding()
         .background(Color(.systemBackground))
