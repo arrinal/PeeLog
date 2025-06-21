@@ -22,6 +22,7 @@ struct AddEventView: View {
 
 struct AddEventViewContent: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
     @StateObject private var viewModel: AddEventViewModel
     
     init(viewModel: AddEventViewModel) {
@@ -69,13 +70,30 @@ struct AddEventViewContent: View {
     private var backgroundGradient: some View {
         LinearGradient(
             gradient: Gradient(colors: [
-                Color(red: 0.95, green: 0.97, blue: 1.0),
-                Color(red: 0.90, green: 0.95, blue: 0.99)
+                colorScheme == .dark ? 
+                    Color(red: 0.05, green: 0.05, blue: 0.08) : 
+                    Color(red: 0.95, green: 0.97, blue: 1.0),
+                colorScheme == .dark ? 
+                    Color(red: 0.08, green: 0.08, blue: 0.12) : 
+                    Color(red: 0.90, green: 0.95, blue: 0.99)
             ]),
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
         .ignoresSafeArea()
+    }
+    
+    private var cardBackground: some View {
+        RoundedRectangle(cornerRadius: 16)
+            .fill(Color(.systemBackground))
+            .shadow(
+                color: colorScheme == .dark ? 
+                    Color.white.opacity(0.05) : 
+                    Color.black.opacity(0.06), 
+                radius: 8, 
+                x: 0, 
+                y: 2
+            )
     }
     
     private var headerSection: some View {
@@ -124,11 +142,7 @@ struct AddEventViewContent: View {
             }
         }
         .padding(24)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color.white)
-                .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 2)
-        )
+        .background(cardBackground)
         .padding(.horizontal, 20)
     }
     
@@ -155,11 +169,7 @@ struct AddEventViewContent: View {
             }
         }
         .padding(24)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color.white)
-                .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 2)
-        )
+        .background(cardBackground)
         .padding(.horizontal, 20)
     }
     
@@ -235,11 +245,7 @@ struct AddEventViewContent: View {
             }
         }
         .padding(24)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color.white)
-                .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 2)
-        )
+        .background(cardBackground)
         .padding(.horizontal, 20)
     }
     
@@ -339,7 +345,7 @@ struct AddEventViewContent: View {
             .padding(16)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.gray.opacity(0.05))
+                    .fill(Color(.systemGray6))
             )
     }
     
@@ -417,19 +423,15 @@ struct AddEventViewContent: View {
                     .padding(16)
                     .background(
                         RoundedRectangle(cornerRadius: 12)
-                            .fill(Color.gray.opacity(0.05))
-                            .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                            .fill(Color(.systemGray6))
+                            .stroke(Color(.systemGray4), lineWidth: 1)
                     )
                     .autocorrectionDisabled()
                     .lineLimit(3...6)
             }
         }
         .padding(24)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color.white)
-                .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 2)
-        )
+        .background(cardBackground)
         .padding(.horizontal, 20)
     }
     
@@ -493,6 +495,8 @@ struct MaterialQualityButton: View {
     let isSelected: Bool
     let action: () -> Void
     
+    @Environment(\.colorScheme) private var colorScheme
+    
     var body: some View {
         Button(action: action) {
             VStack(spacing: 12) {
@@ -555,7 +559,7 @@ struct MaterialQualityButton: View {
                 RoundedRectangle(cornerRadius: 16)
                     .fill(
                         isSelected ? 
-                        Color.blue.opacity(0.04) : 
+                        Color.blue.opacity(colorScheme == .dark ? 0.08 : 0.04) : 
                         Color.clear
                     )
                     .stroke(

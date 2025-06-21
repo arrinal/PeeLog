@@ -11,6 +11,7 @@ import MapKit
 
 struct HomeView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.colorScheme) private var colorScheme
     @ObservedObject var viewModel: HomeViewModel
     @State private var showingAddEventSheet = false
     @State private var selectedEvent: PeeEvent?
@@ -20,16 +21,9 @@ struct HomeView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                // Material background
-                LinearGradient(
-                    gradient: Gradient(colors: [
-                        Color(red: 0.95, green: 0.97, blue: 1.0),
-                        Color(red: 0.90, green: 0.95, blue: 0.99)
-                    ]),
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .ignoresSafeArea()
+                // Adaptive background
+                backgroundGradient
+                    .ignoresSafeArea()
                 
                 ScrollView {
                     VStack(spacing: 20) {
@@ -75,11 +69,7 @@ struct HomeView: View {
                             }
                         }
                         .padding(24)
-                        .background(
-                            RoundedRectangle(cornerRadius: 20)
-                                .fill(Color.white)
-                                .shadow(color: Color.black.opacity(0.08), radius: 12, x: 0, y: 4)
-                        )
+                        .background(cardBackground)
                         .padding(.horizontal, 20)
                         
                         // Events List
@@ -125,11 +115,7 @@ struct HomeView: View {
                                 }
                                 .frame(maxWidth: .infinity)
                                 .padding(32)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 16)
-                                        .fill(Color.white)
-                                        .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 2)
-                                )
+                                .background(cardBackground)
                                 .padding(.horizontal, 20)
                             } else {
                                 LazyVStack(spacing: 12) {
@@ -224,6 +210,35 @@ struct HomeView: View {
             viewModel.loadTodaysEvents()
         }
     }
+    
+    // MARK: - Adaptive Colors
+    private var backgroundGradient: some View {
+        LinearGradient(
+            gradient: Gradient(colors: [
+                colorScheme == .dark ? 
+                    Color(red: 0.05, green: 0.05, blue: 0.08) : 
+                    Color(red: 0.95, green: 0.97, blue: 1.0),
+                colorScheme == .dark ? 
+                    Color(red: 0.08, green: 0.08, blue: 0.12) : 
+                    Color(red: 0.90, green: 0.95, blue: 0.99)
+            ]),
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+    
+    private var cardBackground: some View {
+        RoundedRectangle(cornerRadius: 20)
+            .fill(Color(.systemBackground))
+            .shadow(
+                color: colorScheme == .dark ? 
+                    Color.white.opacity(0.05) : 
+                    Color.black.opacity(0.08), 
+                radius: 12, 
+                x: 0, 
+                y: 4
+            )
+    }
 }
 
 // MARK: - Event Card Component
@@ -232,6 +247,7 @@ struct EventCard: View {
     let onLocationTap: () -> Void
     let onDelete: () -> Void
     
+    @Environment(\.colorScheme) private var colorScheme
     @State private var offset: CGFloat = 0
     @State private var isDeleting = false
     @State private var isDragging = false
@@ -346,8 +362,15 @@ struct EventCard: View {
             .padding(20)
             .background(
                 RoundedRectangle(cornerRadius: 16)
-                    .fill(Color.white)
-                    .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 2)
+                    .fill(Color(.systemBackground))
+                    .shadow(
+                        color: colorScheme == .dark ? 
+                            Color.white.opacity(0.05) : 
+                            Color.black.opacity(0.06), 
+                        radius: 8, 
+                        x: 0, 
+                        y: 2
+                    )
             )
             .offset(x: offset)
             .scaleEffect(isDeleting ? 0.9 : 1.0)
