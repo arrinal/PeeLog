@@ -46,6 +46,7 @@ enum TimeRangeFilter: String, CaseIterable {
 struct HistoryView: View {
     @Environment(\.dependencyContainer) private var container
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
     @Query(sort: \PeeEvent.timestamp, order: .reverse) private var allEvents: [PeeEvent]
     @State private var selectedFilter: TimeRangeFilter = .today
     @State private var customStartDate: Date = Calendar.current.date(byAdding: .day, value: -7, to: Date())!
@@ -67,16 +68,9 @@ struct HistoryView: View {
     
     var body: some View {
         ZStack {
-            // Material background
-            LinearGradient(
-                gradient: Gradient(colors: [
-                    Color(red: 0.95, green: 0.97, blue: 1.0),
-                    Color(red: 0.90, green: 0.95, blue: 0.99)
-                ]),
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+            // Adaptive background
+            backgroundGradient
+                .ignoresSafeArea()
             
             ScrollView {
                 VStack(spacing: 20) {
@@ -113,11 +107,7 @@ struct HistoryView: View {
                             }
                         }
                         .padding(20)
-                        .background(
-                            RoundedRectangle(cornerRadius: 16)
-                                .fill(Color.white.opacity(0.8))
-                                .stroke(Color.blue.opacity(0.2), lineWidth: 1)
-                        )
+                        .background(filterCardBackground)
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 10)
@@ -158,11 +148,7 @@ struct HistoryView: View {
                         }
                         .frame(maxWidth: .infinity)
                         .padding(32)
-                        .background(
-                            RoundedRectangle(cornerRadius: 20)
-                                .fill(Color.white)
-                                .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 2)
-                        )
+                        .background(cardBackground)
                         .padding(.horizontal, 20)
                     } else {
                         // Grouped Events
@@ -213,6 +199,41 @@ struct HistoryView: View {
         }
     }
     
+    // MARK: - Adaptive Colors
+    private var backgroundGradient: some View {
+        LinearGradient(
+            gradient: Gradient(colors: [
+                colorScheme == .dark ? 
+                    Color(red: 0.05, green: 0.05, blue: 0.08) : 
+                    Color(red: 0.95, green: 0.97, blue: 1.0),
+                colorScheme == .dark ? 
+                    Color(red: 0.08, green: 0.08, blue: 0.12) : 
+                    Color(red: 0.90, green: 0.95, blue: 0.99)
+            ]),
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+    
+    private var cardBackground: some View {
+        RoundedRectangle(cornerRadius: 20)
+            .fill(Color(.systemBackground))
+            .shadow(
+                color: colorScheme == .dark ? 
+                    Color.white.opacity(0.05) : 
+                    Color.black.opacity(0.06), 
+                radius: 8, 
+                x: 0, 
+                y: 2
+            )
+    }
+    
+    private var filterCardBackground: some View {
+        RoundedRectangle(cornerRadius: 16)
+            .fill(Color(.systemBackground).opacity(0.8))
+            .stroke(Color.blue.opacity(0.2), lineWidth: 1)
+    }
+    
     private func groupEventsByDay() -> [(date: Date, events: [PeeEvent])] {
         let calendar = Calendar.current
         let grouped = Dictionary(grouping: filteredEvents) { event in
@@ -243,6 +264,8 @@ struct DayGroupCard: View {
     let date: Date
     let events: [PeeEvent]
     let onLocationTap: (PeeEvent) -> Void
+    
+    @Environment(\.colorScheme) private var colorScheme
     
     var body: some View {
         VStack(spacing: 16) {
@@ -281,8 +304,15 @@ struct DayGroupCard: View {
         .padding(20)
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(Color.white)
-                .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 2)
+                .fill(Color(.systemBackground))
+                .shadow(
+                    color: colorScheme == .dark ? 
+                        Color.white.opacity(0.05) : 
+                        Color.black.opacity(0.06), 
+                    radius: 8, 
+                    x: 0, 
+                    y: 2
+                )
         )
     }
     
@@ -358,6 +388,8 @@ struct DayGroupCard: View {
 struct HistoryEventCard: View {
     let event: PeeEvent
     let onLocationTap: (PeeEvent) -> Void
+    
+    @Environment(\.colorScheme) private var colorScheme
     
     var body: some View {
         HStack(spacing: 12) {
@@ -439,8 +471,8 @@ struct HistoryEventCard: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color.gray.opacity(0.03))
-                .stroke(Color.gray.opacity(0.1), lineWidth: 1)
+                .fill(Color(.systemGray6).opacity(colorScheme == .dark ? 0.3 : 1.0))
+                .stroke(Color(.systemGray4).opacity(0.5), lineWidth: 1)
         )
     }
 }
@@ -452,10 +484,12 @@ struct FilterSheet: View {
     @Binding var customEndDate: Date
     @Binding var isPresented: Bool
     
+    @Environment(\.colorScheme) private var colorScheme
+    
     var body: some View {
         NavigationStack {
             ZStack {
-                Color(red: 0.95, green: 0.97, blue: 1.0)
+                backgroundGradient
                     .ignoresSafeArea()
                 
                 ScrollView {
@@ -508,12 +542,7 @@ struct FilterSheet: View {
                                         }
                                     }
                                     .padding(20)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 16)
-                                            .fill(selectedFilter == filter ? Color.blue.opacity(0.08) : Color.white)
-                                            .stroke(selectedFilter == filter ? Color.blue.opacity(0.3) : Color.clear, lineWidth: 2)
-                                            .shadow(color: Color.black.opacity(0.04), radius: 4, x: 0, y: 2)
-                                    )
+                                    .background(filterOptionBackground(isSelected: selectedFilter == filter))
                                 }
                                 .buttonStyle(PlainButtonStyle())
                             }
@@ -566,11 +595,7 @@ struct FilterSheet: View {
                                 .padding(.top, 8)
                             }
                             .padding(20)
-                            .background(
-                                RoundedRectangle(cornerRadius: 16)
-                                    .fill(Color.white)
-                                    .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 2)
-                            )
+                            .background(cardBackground)
                         }
                     }
                     .padding(.horizontal, 20)
@@ -588,6 +613,42 @@ struct FilterSheet: View {
                 }
             }
         }
+    }
+    
+    // MARK: - Adaptive Colors
+    private var backgroundGradient: some View {
+        LinearGradient(
+            gradient: Gradient(colors: [
+                colorScheme == .dark ? 
+                    Color(red: 0.05, green: 0.05, blue: 0.08) : 
+                    Color(red: 0.95, green: 0.97, blue: 1.0),
+                colorScheme == .dark ? 
+                    Color(red: 0.08, green: 0.08, blue: 0.12) : 
+                    Color(red: 0.90, green: 0.95, blue: 0.99)
+            ]),
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+    
+    private var cardBackground: some View {
+        RoundedRectangle(cornerRadius: 16)
+            .fill(Color(.systemBackground))
+            .shadow(
+                color: colorScheme == .dark ? 
+                    Color.white.opacity(0.05) : 
+                    Color.black.opacity(0.06), 
+                radius: 8, 
+                x: 0, 
+                y: 2
+            )
+    }
+    
+    private func filterOptionBackground(isSelected: Bool) -> some View {
+        RoundedRectangle(cornerRadius: 16)
+            .fill(isSelected ? Color.blue.opacity(colorScheme == .dark ? 0.15 : 0.08) : Color(.systemBackground))
+            .stroke(isSelected ? Color.blue.opacity(0.3) : Color.clear, lineWidth: 2)
+            .shadow(color: colorScheme == .dark ? Color.white.opacity(0.02) : Color.black.opacity(0.04), radius: 4, x: 0, y: 2)
     }
     
     private func dateRangeDescription(for filter: TimeRangeFilter) -> String {
