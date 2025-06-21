@@ -36,6 +36,39 @@ struct StatisticsView: View {
         .onAppear {
             viewModel.loadStatistics()
         }
+        .sheet(isPresented: $viewModel.showingQualityTrendsCustomDatePicker) {
+            CustomDateRangeSheet(
+                title: "Quality Trends Custom Range",
+                startDate: $viewModel.qualityTrendsCustomStartDate,
+                endDate: $viewModel.qualityTrendsCustomEndDate,
+                onApply: { startDate, endDate in
+                    viewModel.updateQualityTrendsCustomDateRange(startDate: startDate, endDate: endDate)
+                    viewModel.showingQualityTrendsCustomDatePicker = false
+                }
+            )
+        }
+        .sheet(isPresented: $viewModel.showingDailyPatternsCustomDatePicker) {
+            CustomDateRangeSheet(
+                title: "Daily Patterns Custom Range",
+                startDate: $viewModel.dailyPatternsCustomStartDate,
+                endDate: $viewModel.dailyPatternsCustomEndDate,
+                onApply: { startDate, endDate in
+                    viewModel.updateDailyPatternsCustomDateRange(startDate: startDate, endDate: endDate)
+                    viewModel.showingDailyPatternsCustomDatePicker = false
+                }
+            )
+        }
+        .sheet(isPresented: $viewModel.showingQualityDistributionCustomDatePicker) {
+            CustomDateRangeSheet(
+                title: "Quality Distribution Custom Range",
+                startDate: $viewModel.qualityDistributionCustomStartDate,
+                endDate: $viewModel.qualityDistributionCustomEndDate,
+                onApply: { startDate, endDate in
+                    viewModel.updateQualityDistributionCustomDateRange(startDate: startDate, endDate: endDate)
+                    viewModel.showingQualityDistributionCustomDatePicker = false
+                }
+            )
+        }
     }
     
     private var summaryCardsSection: some View {
@@ -93,18 +126,28 @@ struct StatisticsView: View {
                     .fontWeight(.bold)
                 Spacer()
                 Menu {
-                    Button("Last 7 Days") { viewModel.selectedPeriod = .week }
-                    Button("Last 30 Days") { viewModel.selectedPeriod = .month }
-                    Button("Last 90 Days") { viewModel.selectedPeriod = .quarter }
+                    Button("Last 7 Days") { viewModel.qualityTrendsPeriod = .week }
+                    Button("Last 30 Days") { viewModel.qualityTrendsPeriod = .month }
+                    Button("Last 90 Days") { viewModel.qualityTrendsPeriod = .quarter }
+                    Button("All Time") { viewModel.qualityTrendsPeriod = .allTime }
+                    Button("Custom Range") { 
+                        viewModel.qualityTrendsPeriod = .custom
+                        viewModel.showingQualityTrendsCustomDatePicker = true
+                    }
                 } label: {
                     HStack {
-                        Text(viewModel.selectedPeriod.rawValue)
+                        Text(viewModel.qualityTrendsPeriod.rawValue)
                         Image(systemName: "chevron.down")
                     }
                     .font(.caption)
                     .foregroundColor(.secondary)
                 }
             }
+            
+            Text("Track your hydration quality over time. A higher quality score indicates better hydration, while declining trends may suggest you need to drink more water.")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
             
             if !viewModel.qualityTrendData.isEmpty {
                 Chart(viewModel.qualityTrendData) { dataPoint in
@@ -129,9 +172,33 @@ struct StatisticsView: View {
     
     private var dailyPatternsSection: some View {
         VStack(spacing: 16) {
-            Text("Daily Patterns")
-                .font(.title2)
-                .fontWeight(.bold)
+            HStack {
+                Text("Daily Patterns")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                Spacer()
+                Menu {
+                    Button("Last 7 Days") { viewModel.dailyPatternsPeriod = .week }
+                    Button("Last 30 Days") { viewModel.dailyPatternsPeriod = .month }
+                    Button("Last 90 Days") { viewModel.dailyPatternsPeriod = .quarter }
+                    Button("All Time") { viewModel.dailyPatternsPeriod = .allTime }
+                    Button("Custom Range") { 
+                        viewModel.dailyPatternsPeriod = .custom
+                        viewModel.showingDailyPatternsCustomDatePicker = true
+                    }
+                } label: {
+                    HStack {
+                        Text(viewModel.dailyPatternsPeriod.rawValue)
+                        Image(systemName: "chevron.down")
+                    }
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                }
+            }
+            
+            Text("Discover when you urinate most frequently throughout the day. This helps identify your natural rhythm and optimal hydration timing.")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
             
             if !viewModel.hourlyData.isEmpty {
@@ -156,9 +223,33 @@ struct StatisticsView: View {
     
     private var qualityDistributionSection: some View {
         VStack(spacing: 16) {
-            Text("Quality Distribution")
-                .font(.title2)
-                .fontWeight(.bold)
+            HStack {
+                Text("Quality Distribution")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                Spacer()
+                Menu {
+                    Button("Last 7 Days") { viewModel.qualityDistributionPeriod = .week }
+                    Button("Last 30 Days") { viewModel.qualityDistributionPeriod = .month }
+                    Button("Last 90 Days") { viewModel.qualityDistributionPeriod = .quarter }
+                    Button("All Time") { viewModel.qualityDistributionPeriod = .allTime }
+                    Button("Custom Range") { 
+                        viewModel.qualityDistributionPeriod = .custom
+                        viewModel.showingQualityDistributionCustomDatePicker = true
+                    }
+                } label: {
+                    HStack {
+                        Text(viewModel.qualityDistributionPeriod.rawValue)
+                        Image(systemName: "chevron.down")
+                    }
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                }
+            }
+            
+            Text("See the breakdown of your hydration quality levels. A healthy distribution should have more clear and light yellow events than dark yellow or amber ones.")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
             
             if !viewModel.qualityDistribution.isEmpty {
@@ -211,6 +302,11 @@ struct StatisticsView: View {
             Text("Weekly Overview")
                 .font(.title2)
                 .fontWeight(.bold)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            
+            Text("Your weekly activity at a glance. Each day shows the number of events and average quality, helping you spot patterns across the week.")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
             
             LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 7), spacing: 8) {
@@ -398,6 +494,135 @@ struct HealthInsightCard: View {
         .padding()
         .background(Color(.systemGray6))
         .cornerRadius(12)
+    }
+}
+
+// MARK: - Custom Date Range Sheet
+struct CustomDateRangeSheet: View {
+    let title: String
+    @Binding var startDate: Date
+    @Binding var endDate: Date
+    let onApply: (Date, Date) -> Void
+    
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                backgroundGradient
+                    .ignoresSafeArea()
+                
+                VStack(spacing: 24) {
+                    VStack(spacing: 12) {
+                        Text(title)
+                            .font(.title2)
+                            .fontWeight(.bold)
+                            .foregroundColor(.primary)
+                        
+                        Text("Select a custom date range for analysis")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .padding(.top, 20)
+                    
+                    VStack(spacing: 20) {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Start Date")
+                                .font(.headline)
+                                .foregroundColor(.primary)
+                            
+                            DatePicker(
+                                "",
+                                selection: $startDate,
+                                in: ...Date(),
+                                displayedComponents: .date
+                            )
+                            .datePickerStyle(.compact)
+                            .accentColor(.blue)
+                        }
+                        .padding()
+                        .background(cardBackground)
+                        
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("End Date")
+                                .font(.headline)
+                                .foregroundColor(.primary)
+                            
+                            DatePicker(
+                                "",
+                                selection: $endDate,
+                                in: startDate...Date(),
+                                displayedComponents: .date
+                            )
+                            .datePickerStyle(.compact)
+                            .accentColor(.blue)
+                        }
+                        .padding()
+                        .background(cardBackground)
+                    }
+                    
+                    Button(action: {
+                        onApply(startDate, endDate)
+                    }) {
+                        Text("Apply Date Range")
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .fill(Color.blue)
+                                    .shadow(color: Color.blue.opacity(0.4), radius: 8, x: 0, y: 4)
+                            )
+                    }
+                    .padding(.top, 12)
+                    
+                    Spacer()
+                }
+                .padding(.horizontal, 20)
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                    .foregroundColor(.blue)
+                    .fontWeight(.medium)
+                }
+            }
+        }
+    }
+    
+    private var backgroundGradient: some View {
+        LinearGradient(
+            gradient: Gradient(colors: [
+                colorScheme == .dark ? 
+                    Color(red: 0.05, green: 0.05, blue: 0.08) : 
+                    Color(red: 0.95, green: 0.97, blue: 1.0),
+                colorScheme == .dark ? 
+                    Color(red: 0.08, green: 0.08, blue: 0.12) : 
+                    Color(red: 0.90, green: 0.95, blue: 0.99)
+            ]),
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+    
+    private var cardBackground: some View {
+        RoundedRectangle(cornerRadius: 16)
+            .fill(Color(.systemBackground))
+            .shadow(
+                color: colorScheme == .dark ? 
+                    Color.white.opacity(0.05) : 
+                    Color.black.opacity(0.06), 
+                radius: 8, 
+                x: 0, 
+                y: 2
+            )
     }
 }
 
