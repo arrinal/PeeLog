@@ -25,11 +25,37 @@ final class StatisticsViewModel: ObservableObject {
     @Published var thisWeekEvents: Int = 0
     @Published var averageDaily: Double = 0.0
     @Published var healthScore: Double = 0.0
-    @Published var selectedPeriod: TimePeriod = .quarter {
+    // Separate periods for each section
+    @Published var qualityTrendsPeriod: TimePeriod = .quarter {
         didSet {
             generateQualityTrends()
         }
     }
+    
+    @Published var dailyPatternsPeriod: TimePeriod = .quarter {
+        didSet {
+            generateHourlyPatterns()
+        }
+    }
+    
+    @Published var qualityDistributionPeriod: TimePeriod = .allTime {
+        didSet {
+            generateQualityDistribution()
+        }
+    }
+    
+    // Custom date range properties for each section
+    @Published var qualityTrendsCustomStartDate: Date = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
+    @Published var qualityTrendsCustomEndDate: Date = Date()
+    @Published var showingQualityTrendsCustomDatePicker: Bool = false
+    
+    @Published var dailyPatternsCustomStartDate: Date = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
+    @Published var dailyPatternsCustomEndDate: Date = Date()
+    @Published var showingDailyPatternsCustomDatePicker: Bool = false
+    
+    @Published var qualityDistributionCustomStartDate: Date = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
+    @Published var qualityDistributionCustomEndDate: Date = Date()
+    @Published var showingQualityDistributionCustomDatePicker: Bool = false
     
     @Published var qualityTrendData: [QualityTrendPoint] = []
     @Published var hourlyData: [HourlyData] = []
@@ -97,15 +123,30 @@ final class StatisticsViewModel: ObservableObject {
     }
     
     private func generateQualityTrends() {
-        qualityTrendData = generateQualityTrendsUseCase.execute(events: allEvents, period: selectedPeriod)
+        qualityTrendData = generateQualityTrendsUseCase.execute(
+            events: allEvents,
+            period: qualityTrendsPeriod,
+            customStartDate: qualityTrendsCustomStartDate,
+            customEndDate: qualityTrendsCustomEndDate
+        )
     }
     
     private func generateHourlyPatterns() {
-        hourlyData = analyzeHourlyPatternsUseCase.execute(events: allEvents)
+        hourlyData = analyzeHourlyPatternsUseCase.execute(
+            events: allEvents,
+            period: dailyPatternsPeriod,
+            customStartDate: dailyPatternsCustomStartDate,
+            customEndDate: dailyPatternsCustomEndDate
+        )
     }
     
     private func generateQualityDistribution() {
-        qualityDistribution = generateQualityDistributionUseCase.execute(events: allEvents)
+        qualityDistribution = generateQualityDistributionUseCase.execute(
+            events: allEvents,
+            period: qualityDistributionPeriod,
+            customStartDate: qualityDistributionCustomStartDate,
+            customEndDate: qualityDistributionCustomEndDate
+        )
     }
     
     private func generateWeeklyData() {
@@ -115,6 +156,30 @@ final class StatisticsViewModel: ObservableObject {
     private func generateHealthInsights() {
         guard let stats = basicStatistics else { return }
         healthInsights = generateHealthInsightsUseCase.execute(statistics: stats, events: allEvents)
+    }
+    
+    func updateQualityTrendsCustomDateRange(startDate: Date, endDate: Date) {
+        qualityTrendsCustomStartDate = startDate
+        qualityTrendsCustomEndDate = endDate
+        if qualityTrendsPeriod == .custom {
+            generateQualityTrends()
+        }
+    }
+    
+    func updateDailyPatternsCustomDateRange(startDate: Date, endDate: Date) {
+        dailyPatternsCustomStartDate = startDate
+        dailyPatternsCustomEndDate = endDate
+        if dailyPatternsPeriod == .custom {
+            generateHourlyPatterns()
+        }
+    }
+    
+    func updateQualityDistributionCustomDateRange(startDate: Date, endDate: Date) {
+        qualityDistributionCustomStartDate = startDate
+        qualityDistributionCustomEndDate = endDate
+        if qualityDistributionPeriod == .custom {
+            generateQualityDistribution()
+        }
     }
 }
 
