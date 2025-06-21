@@ -137,8 +137,8 @@ struct HomeView: View {
                                         EventCard(
                                             event: event,
                                             onLocationTap: {
-                                            selectedEvent = event
-                                            showingMapSheet = true
+                                                selectedEvent = event
+                                                showingMapSheet = true
                                             },
                                             onDelete: {
                                                 withAnimation(.spring(dampingFraction: 0.8)) {
@@ -146,11 +146,20 @@ struct HomeView: View {
                                                 }
                                             }
                                         )
-                                        .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                                        .contextMenu {
+                                            Button {
+                                                withAnimation(.spring(dampingFraction: 0.8)) {
+                                                    viewModel.deleteEvent(event: event)
+                                                }
+                                            } label: {
+                                                Label("Delete", systemImage: "trash.fill")
                                             }
                                         }
-                                .padding(.horizontal, 20)
+                                        .transition(.opacity.combined(with: .scale(scale: 0.95)))
                                     }
+                                }
+                                .padding(.horizontal, 20)
+                            }
                                 }
                     }
                     .padding(.bottom, 100) // Space for FAB
@@ -225,9 +234,10 @@ struct EventCard: View {
     
     @State private var offset: CGFloat = 0
     @State private var isDeleting = false
+    @State private var isDragging = false
     
     private let screenWidth = UIScreen.main.bounds.width
-    private let deleteThreshold: CGFloat = UIScreen.main.bounds.width * 0.75 // 75% of screen width
+    private let deleteThreshold: CGFloat = UIScreen.main.bounds.width * 0.75
     
     var body: some View {
         ZStack {
@@ -253,7 +263,7 @@ struct EventCard: View {
                                 .padding(.trailing, 20)
                             }
                         )
-                        .frame(width: max(abs(offset), screenWidth)) // Can expand to full screen width
+                        .frame(width: max(abs(offset), screenWidth))
                         .cornerRadius(16, corners: [.topRight, .bottomRight])
                 }
             }
@@ -342,12 +352,16 @@ struct EventCard: View {
             .offset(x: offset)
             .scaleEffect(isDeleting ? 0.9 : 1.0)
             .opacity(isDeleting ? 0.4 : 1.0)
-            .animation(.interactiveSpring(response: 0.3, dampingFraction: 0.8), value: isDeleting)
             .gesture(
                 DragGesture()
                     .onChanged { value in
+                        // Prevent interaction if already deleting
+                        guard !isDeleting else { return }
+                        
                         // Only allow left swipe (negative translation)
                         if value.translation.width < 0 {
+                            isDragging = true
+                            
                             // Allow card to move up to full screen width with progressive resistance
                             let dragDistance = abs(value.translation.width)
                             
@@ -360,10 +374,19 @@ struct EventCard: View {
                                 let resistance = min(excessDistance / (screenWidth * 0.25), 1.0)
                                 let resistedDistance = excessDistance * (1.0 - resistance * 0.7)
                                 offset = -(deleteThreshold + resistedDistance)
-        }
+                            }
+                        } else if isDragging {
+                            // If dragging right while already swiping left, reset
+                            offset = 0
                         }
                     }
                     .onEnded { value in
+                        // Prevent multiple gesture handling during deletion
+                        guard !isDeleting else { return }
+                        
+                        // Mark as no longer dragging
+                        isDragging = false
+                        
                         let swipeDistance = abs(value.translation.width)
                         let swipeVelocity = abs(value.velocity.width)
                         
@@ -372,10 +395,12 @@ struct EventCard: View {
                                          (swipeVelocity > 1000 && swipeDistance > screenWidth * 0.3)
                         
                         if shouldDelete {
+                            // Mark as deleting to prevent further interactions
+                            isDeleting = true
+                            
                             // Animate deletion - slide completely off screen
                             withAnimation(.easeOut(duration: 0.3)) {
                                 offset = -screenWidth
-                                isDeleting = true
                             }
                             
                             // Execute deletion after animation
@@ -383,10 +408,8 @@ struct EventCard: View {
                                 onDelete()
                             }
                         } else {
-                            // Snap back to original position with bounce
-                            withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
-                                offset = 0
-                            }
+                            // iOS 17 Fix: Simple immediate reset without complex animations
+                            offset = 0
                         }
                     }
             )
