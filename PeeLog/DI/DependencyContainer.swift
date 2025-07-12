@@ -116,10 +116,10 @@ class DependencyContainer: ObservableObject {
         return StatisticsViewModel(
             getAllEventsUseCase: GetAllPeeEventsUseCase(repository: repository),
             calculateStatisticsUseCase: CalculateBasicStatisticsUseCase(repository: repository),
-            generateQualityTrendsUseCase: GenerateQualityTrendsUseCase(repository: repository),
+            generateQualityTrendsUseCase: GenerateQualityTrendsUseCase(),
             generateHealthInsightsUseCase: GenerateHealthInsightsUseCase(repository: repository),
-            analyzeHourlyPatternsUseCase: AnalyzeHourlyPatternsUseCase(repository: repository),
-            generateQualityDistributionUseCase: GenerateQualityDistributionUseCase(repository: repository),
+            analyzeHourlyPatternsUseCase: AnalyzeHourlyPatternsUseCase(),
+            generateQualityDistributionUseCase: GenerateQualityDistributionUseCase(),
             generateWeeklyDataUseCase: GenerateWeeklyDataUseCase(repository: repository)
         )
     }

@@ -333,29 +333,7 @@ struct ProfileView: View {
 
 // MARK: - Extensions for UI
 
-extension ThemePreference {
-    var displayText: String {
-        switch self {
-        case .light:
-            return "Light"
-        case .dark:
-            return "Dark"
-        case .system:
-            return "System"
-        }
-    }
-}
-
-extension MeasurementUnit {
-    var displayText: String {
-        switch self {
-        case .metric:
-            return "Metric"
-        case .imperial:
-            return "Imperial"
-        }
-    }
-}
+// Display properties are now defined directly in the enum types in User.swift
 
 #Preview {
     let modelContainer = try! ModelContainer(for: User.self, PeeEvent.self)

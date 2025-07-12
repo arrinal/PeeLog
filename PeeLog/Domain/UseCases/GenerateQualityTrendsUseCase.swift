@@ -7,29 +7,9 @@
 
 import Foundation
 
-// Use case for generating quality trends
-@MainActor
-class GenerateQualityTrendsUseCase {
-    private let repository: PeeEventRepository
-    
-    init(repository: PeeEventRepository) {
-        self.repository = repository
-    }
-    
-    func execute(events: [PeeEvent], period: TimePeriod, customStartDate: Date? = nil, customEndDate: Date? = nil) -> [QualityTrendPoint] {
-        let filteredEvents = filterEventsByPeriod(events: events, period: period, customStartDate: customStartDate, customEndDate: customEndDate)
-        let calendar = Calendar.current
-        let groupedByDay = Dictionary(grouping: filteredEvents) { event in
-            calendar.startOfDay(for: event.timestamp)
-        }
-        
-        return groupedByDay.map { date, events in
-            let averageQuality = events.map { $0.quality.numericValue }.reduce(0, +) / Double(events.count)
-            return QualityTrendPoint(date: date, averageQuality: averageQuality)
-        }.sorted { $0.date < $1.date }
-    }
-    
-    private func filterEventsByPeriod(events: [PeeEvent], period: TimePeriod, customStartDate: Date?, customEndDate: Date?) -> [PeeEvent] {
+// MARK: - Date Filtering Utility
+struct DateFilteringUtility {
+    static func filterEventsByPeriod(events: [PeeEvent], period: TimePeriod, customStartDate: Date?, customEndDate: Date?) -> [PeeEvent] {
         let calendar = Calendar.current
         let now = Date()
         let startDate: Date
@@ -55,6 +35,31 @@ class GenerateQualityTrendsUseCase {
         }
         
         return events.filter { $0.timestamp >= startDate && $0.timestamp <= endDate }
+    }
+}
+
+// MARK: - Generate Quality Trends Use Case
+class GenerateQualityTrendsUseCase {
+    func execute(events: [PeeEvent], period: TimePeriod, customStartDate: Date?, customEndDate: Date?) -> [QualityTrendPoint] {
+        let filteredEvents = DateFilteringUtility.filterEventsByPeriod(
+            events: events, 
+            period: period, 
+            customStartDate: customStartDate, 
+            customEndDate: customEndDate
+        )
+        
+        guard !filteredEvents.isEmpty else { return [] }
+        
+        // Group events by day and calculate average quality for each day
+        let calendar = Calendar.current
+        let groupedEvents = Dictionary(grouping: filteredEvents) { event in
+            calendar.startOfDay(for: event.timestamp)
+        }
+        
+        return groupedEvents.map { (date, events) in
+            let averageQuality = events.map { $0.quality.numericValue }.reduce(0, +) / Double(events.count)
+            return QualityTrendPoint(date: date, averageQuality: averageQuality)
+        }.sorted { $0.date < $1.date }
     }
 }
 

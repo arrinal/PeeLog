@@ -31,7 +31,7 @@ enum MeasurementUnit: String, Codable, CaseIterable {
     case metric = "metric"
     case imperial = "imperial"
     
-    var displayName: String {
+    var displayText: String {
         switch self {
         case .metric:
             return "Metric"
@@ -47,7 +47,7 @@ enum ThemePreference: String, Codable, CaseIterable {
     case dark = "dark"
     case system = "system"
     
-    var displayName: String {
+    var displayText: String {
         switch self {
         case .light:
             return "Light"
