@@ -17,14 +17,22 @@ class DependencyContainer: ObservableObject {
     private let locationRepository: LocationRepository
     private let errorHandlingUseCase: ErrorHandlingUseCase
     
+    // MARK: - Firebase Services
+    private let firebaseAuthService: FirebaseAuthService
+    
     // MARK: - Repository Cache
     private var peeEventRepository: PeeEventRepository?
+    private var authRepository: AuthRepository?
+    private var userRepository: UserRepository?
     
     init() {
         // Initialize core services
         self.locationService = LocationService()
         self.locationRepository = LocationRepositoryImpl(locationService: locationService)
         self.errorHandlingUseCase = ErrorHandlingUseCaseImpl()
+        
+        // Initialize Firebase services
+        self.firebaseAuthService = FirebaseAuthService()
     }
     
     // MARK: - Repository Factory Methods
@@ -37,6 +45,24 @@ class DependencyContainer: ObservableObject {
         return repository
     }
     
+    private func getAuthRepository(modelContext: ModelContext) -> AuthRepository {
+        if let repository = authRepository {
+            return repository
+        }
+        let repository = AuthRepositoryImpl(firebaseAuthService: firebaseAuthService, modelContext: modelContext)
+        self.authRepository = repository
+        return repository
+    }
+    
+    private func getUserRepository(modelContext: ModelContext) -> UserRepository {
+        if let repository = userRepository {
+            return repository
+        }
+        let repository = UserRepositoryImpl(modelContext: modelContext)
+        self.userRepository = repository
+        return repository
+    }
+    
     // MARK: - Location Repository Access
     func getLocationRepository() -> LocationRepository {
         return locationRepository
@@ -45,6 +71,19 @@ class DependencyContainer: ObservableObject {
     // MARK: - Error Handling Use Case Access
     func getErrorHandlingUseCase() -> ErrorHandlingUseCase {
         return errorHandlingUseCase
+    }
+    
+    // MARK: - Public Repository Access
+    func makeUserRepository(modelContext: ModelContext) -> UserRepository {
+        return getUserRepository(modelContext: modelContext)
+    }
+    
+    func makeAuthRepository(modelContext: ModelContext) -> AuthRepository {
+        return getAuthRepository(modelContext: modelContext)
+    }
+    
+    func makePeeEventRepository(modelContext: ModelContext) -> PeeEventRepository {
+        return getPeeEventRepository(modelContext: modelContext)
     }
     
     // MARK: - View Model Factory Methods
@@ -82,6 +121,55 @@ class DependencyContainer: ObservableObject {
             analyzeHourlyPatternsUseCase: AnalyzeHourlyPatternsUseCase(repository: repository),
             generateQualityDistributionUseCase: GenerateQualityDistributionUseCase(repository: repository),
             generateWeeklyDataUseCase: GenerateWeeklyDataUseCase(repository: repository)
+        )
+    }
+    
+    // MARK: - Profile Feature View Models
+    
+    func makeAuthenticationViewModel(modelContext: ModelContext) -> AuthenticationViewModel {
+        let authRepository = getAuthRepository(modelContext: modelContext)
+        let userRepository = getUserRepository(modelContext: modelContext)
+        let peeEventRepository = getPeeEventRepository(modelContext: modelContext)
+        
+        return AuthenticationViewModel(
+            authenticateUserUseCase: AuthenticateUserUseCase(
+                authRepository: authRepository,
+                userRepository: userRepository,
+                errorHandlingUseCase: errorHandlingUseCase
+            ),
+            createUserProfileUseCase: CreateUserProfileUseCase(
+                userRepository: userRepository,
+                errorHandlingUseCase: errorHandlingUseCase
+            ),
+            migrateGuestDataUseCase: MigrateGuestDataUseCase(
+                userRepository: userRepository,
+                peeEventRepository: peeEventRepository,
+                errorHandlingUseCase: errorHandlingUseCase
+            ),
+            errorHandlingUseCase: errorHandlingUseCase
+        )
+    }
+    
+    func makeProfileViewModel(modelContext: ModelContext) -> ProfileViewModel {
+        let authRepository = getAuthRepository(modelContext: modelContext)
+        let userRepository = getUserRepository(modelContext: modelContext)
+        
+        return ProfileViewModel(
+            authenticateUserUseCase: AuthenticateUserUseCase(
+                authRepository: authRepository,
+                userRepository: userRepository,
+                errorHandlingUseCase: errorHandlingUseCase
+            ),
+            createUserProfileUseCase: CreateUserProfileUseCase(
+                userRepository: userRepository,
+                errorHandlingUseCase: errorHandlingUseCase
+            ),
+            updateUserPreferencesUseCase: UpdateUserPreferencesUseCase(
+                userRepository: userRepository,
+                errorHandlingUseCase: errorHandlingUseCase
+            ),
+            userRepository: userRepository,
+            errorHandlingUseCase: errorHandlingUseCase
         )
     }
 }

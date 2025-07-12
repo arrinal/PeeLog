@@ -18,8 +18,9 @@ final class PeeEvent {
     var latitude: Double?
     var longitude: Double?
     var locationName: String?
+    var userId: UUID? // Added for user association
     
-    init(timestamp: Date, notes: String? = nil, quality: PeeQuality = .paleYellow, latitude: Double? = nil, longitude: Double? = nil, locationName: String? = nil) {
+    init(timestamp: Date, notes: String? = nil, quality: PeeQuality = .paleYellow, latitude: Double? = nil, longitude: Double? = nil, locationName: String? = nil, userId: UUID? = nil) {
         self.id = UUID()
         self.timestamp = timestamp
         self.notes = notes
@@ -27,6 +28,7 @@ final class PeeEvent {
         self.latitude = latitude
         self.longitude = longitude
         self.locationName = locationName
+        self.userId = userId
     }
     
     var hasLocation: Bool {

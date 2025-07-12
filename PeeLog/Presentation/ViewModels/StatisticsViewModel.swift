@@ -86,14 +86,16 @@ final class StatisticsViewModel: ObservableObject {
     }
     
     var healthScoreInterpretation: String {
-        if healthScore > 0.8 {
+        if healthScore > 0.85 {
             return "Excellent"
-        } else if healthScore >= 0.6 {
+        } else if healthScore >= 0.7 {
             return "Good"
-        } else if healthScore >= 0.4 {
+        } else if healthScore >= 0.5 {
             return "Moderate"
-        } else {
+        } else if healthScore >= 0.3 {
             return "Poor"
+        } else {
+            return "Very Poor"
         }
     }
     
@@ -189,11 +191,11 @@ final class StatisticsViewModel: ObservableObject {
 extension PeeQuality {
     var numericValue: Double {
         switch self {
-        case .clear: return 5.0
-        case .paleYellow: return 4.0
-        case .yellow: return 3.0
-        case .darkYellow: return 2.0
-        case .amber: return 1.0
+        case .paleYellow: return 5.0  // Optimal hydration
+        case .clear: return 3.5       // Overhydrated (concerning)
+        case .yellow: return 2.5      // Mildly dehydrated
+        case .darkYellow: return 1.5  // Dehydrated
+        case .amber: return 1.0       // Severely dehydrated
         }
     }
 } 

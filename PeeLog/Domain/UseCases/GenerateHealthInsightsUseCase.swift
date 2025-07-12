@@ -20,34 +20,41 @@ class GenerateHealthInsightsUseCase {
     func execute(statistics: BasicStatistics, events: [PeeEvent]) -> [HealthInsight] {
         var insights: [HealthInsight] = []
         
-        // Hydration insight - now covers all ranges
-        if statistics.healthScore > 0.8 {
+        // Hydration insight - now covers all ranges with proper medical guidance
+        if statistics.healthScore > 0.85 {
             insights.append(HealthInsight(
                 type: .positive,
                 title: "Excellent Hydration",
-                message: "Your urine quality indicates optimal hydration levels.",
-                recommendation: "Keep it up!"
+                message: "Your urine quality indicates optimal hydration levels with mostly pale yellow urine.",
+                recommendation: "Keep it up! You're maintaining perfect hydration balance."
             ))
-        } else if statistics.healthScore >= 0.6 {
+        } else if statistics.healthScore >= 0.7 {
             insights.append(HealthInsight(
                 type: .positive,
                 title: "Good Hydration",
                 message: "You're maintaining healthy hydration levels most of the time.",
-                recommendation: "Stay consistent"
+                recommendation: "Continue your current hydration habits."
             ))
-        } else if statistics.healthScore >= 0.4 {
+        } else if statistics.healthScore >= 0.5 {
             insights.append(HealthInsight(
                 type: .info,
                 title: "Moderate Hydration",
-                message: "Your hydration levels are okay but could be improved.",
-                recommendation: "Drink more water"
+                message: "Your hydration levels show room for improvement with some concerning patterns.",
+                recommendation: "Aim for more pale yellow urine by drinking water regularly."
+            ))
+        } else if statistics.healthScore >= 0.3 {
+            insights.append(HealthInsight(
+                type: .warning,
+                title: "Poor Hydration",
+                message: "Your urine suggests you may be dehydrated or overhydrated frequently.",
+                recommendation: "Monitor your water intake and aim for pale yellow urine."
             ))
         } else {
             insights.append(HealthInsight(
                 type: .warning,
-                title: "Poor Hydration",
-                message: "Your urine suggests you may be dehydrated frequently.",
-                recommendation: "Increase water intake"
+                title: "Very Poor Hydration",
+                message: "Your urine patterns indicate significant hydration concerns.",
+                recommendation: "Please consult a healthcare professional about your hydration patterns."
             ))
         }
         
