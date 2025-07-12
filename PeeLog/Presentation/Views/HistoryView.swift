@@ -333,25 +333,30 @@ struct DayGroupCard: View {
     private func dayQualitySummary() -> String {
         guard !events.isEmpty else { return "No data" }
         
-        // Based on medical research: pale yellow is optimal, clear is overhydrated but acceptable
+        // Based on medical research: pale yellow is optimal, clear is overhydrated
         let optimalCount = events.filter { $0.quality == .paleYellow }.count
-        let acceptableCount = events.filter { $0.quality == .clear || $0.quality == .paleYellow || $0.quality == .yellow }.count
-        let needsAttentionCount = events.filter { $0.quality == .darkYellow || $0.quality == .amber }.count
+        let overhydratedCount = events.filter { $0.quality == .clear }.count
+        let mildlyDehydratedCount = events.filter { $0.quality == .yellow }.count
+        let dehydratedCount = events.filter { $0.quality == .darkYellow }.count
+        let severelyDehydratedCount = events.filter { $0.quality == .amber }.count
         let totalCount = events.count
         
         let optimalPercentage = Double(optimalCount) / Double(totalCount)
-        let acceptablePercentage = Double(acceptableCount) / Double(totalCount)
-        let dehydratedPercentage = Double(needsAttentionCount) / Double(totalCount)
+        let overhydratedPercentage = Double(overhydratedCount) / Double(totalCount)
+        let mildlyDehydratedPercentage = Double(mildlyDehydratedCount) / Double(totalCount)
+        let dehydratedPercentage = Double(dehydratedCount + severelyDehydratedCount) / Double(totalCount)
         
-        // Medical-based assessment
-        if optimalPercentage >= 0.6 && dehydratedPercentage <= 0.1 {
+        // Medical-based assessment with proper categorization
+        if optimalPercentage >= 0.7 && dehydratedPercentage <= 0.1 && overhydratedPercentage <= 0.1 {
             return "Excellent hydration"
-        } else if acceptablePercentage >= 0.7 && dehydratedPercentage <= 0.2 {
+        } else if optimalPercentage >= 0.5 && dehydratedPercentage <= 0.2 && overhydratedPercentage <= 0.2 {
             return "Good hydration"
-        } else if acceptablePercentage >= 0.5 && dehydratedPercentage <= 0.3 {
+        } else if optimalPercentage >= 0.3 && dehydratedPercentage <= 0.4 && overhydratedPercentage <= 0.3 {
             return "Fair hydration"
-        } else if dehydratedPercentage >= 0.5 {
+        } else if dehydratedPercentage >= 0.5 || severelyDehydratedCount > 0 {
             return "Poor hydration - needs attention"
+        } else if overhydratedPercentage >= 0.5 {
+            return "Overhydration - monitor intake"
         } else {
             return "Mixed hydration levels"
         }
@@ -361,23 +366,28 @@ struct DayGroupCard: View {
         guard !events.isEmpty else { return .gray }
         
         let optimalCount = events.filter { $0.quality == .paleYellow }.count
-        let acceptableCount = events.filter { $0.quality == .clear || $0.quality == .paleYellow || $0.quality == .yellow }.count
-        let needsAttentionCount = events.filter { $0.quality == .darkYellow || $0.quality == .amber }.count
+        let overhydratedCount = events.filter { $0.quality == .clear }.count
+        let mildlyDehydratedCount = events.filter { $0.quality == .yellow }.count
+        let dehydratedCount = events.filter { $0.quality == .darkYellow }.count
+        let severelyDehydratedCount = events.filter { $0.quality == .amber }.count
         let totalCount = events.count
         
         let optimalPercentage = Double(optimalCount) / Double(totalCount)
-        let acceptablePercentage = Double(acceptableCount) / Double(totalCount)
-        let dehydratedPercentage = Double(needsAttentionCount) / Double(totalCount)
+        let overhydratedPercentage = Double(overhydratedCount) / Double(totalCount)
+        let mildlyDehydratedPercentage = Double(mildlyDehydratedCount) / Double(totalCount)
+        let dehydratedPercentage = Double(dehydratedCount + severelyDehydratedCount) / Double(totalCount)
         
         // Color coding based on medical standards
-        if optimalPercentage >= 0.6 && dehydratedPercentage <= 0.1 {
+        if optimalPercentage >= 0.7 && dehydratedPercentage <= 0.1 && overhydratedPercentage <= 0.1 {
             return .green // Excellent
-        } else if acceptablePercentage >= 0.7 && dehydratedPercentage <= 0.2 {
+        } else if optimalPercentage >= 0.5 && dehydratedPercentage <= 0.2 && overhydratedPercentage <= 0.2 {
             return Color(red: 0.6, green: 0.8, blue: 0.2) // Good (light green)
-        } else if acceptablePercentage >= 0.5 && dehydratedPercentage <= 0.3 {
+        } else if optimalPercentage >= 0.3 && dehydratedPercentage <= 0.4 && overhydratedPercentage <= 0.3 {
             return .orange // Fair
-        } else if dehydratedPercentage >= 0.5 {
+        } else if dehydratedPercentage >= 0.5 || severelyDehydratedCount > 0 {
             return .red // Poor
+        } else if overhydratedPercentage >= 0.5 {
+            return .blue // Overhydration
         } else {
             return Color(red: 0.8, green: 0.6, blue: 0.2) // Mixed (yellowish)
         }

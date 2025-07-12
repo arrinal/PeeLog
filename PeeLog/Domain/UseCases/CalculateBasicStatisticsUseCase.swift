@@ -39,9 +39,17 @@ class CalculateBasicStatisticsUseCase {
             averageDaily = daysWithEvents > 0 ? Double(totalEvents) / Double(daysWithEvents) : 0.0
             
             // Calculate health score based on quality distribution
-            let goodQualities: Set<PeeQuality> = [.clear, .paleYellow, .yellow]
-            let goodEvents = events.filter { goodQualities.contains($0.quality) }
-            healthScore = totalEvents > 0 ? Double(goodEvents.count) / Double(totalEvents) : 0.0
+            // Only pale yellow is considered optimal hydration
+            let optimalEvents = events.filter { $0.quality == .paleYellow }
+            let acceptableEvents = events.filter { $0.quality == .clear || $0.quality == .paleYellow }
+            let concerningEvents = events.filter { $0.quality == .yellow || $0.quality == .darkYellow || $0.quality == .amber }
+            
+            // Health score calculation based on medical guidelines
+            let optimalScore = Double(optimalEvents.count) / Double(totalEvents) * 1.0
+            let acceptableScore = Double(acceptableEvents.count) / Double(totalEvents) * 0.7
+            let concerningScore = Double(concerningEvents.count) / Double(totalEvents) * 0.3
+            
+            healthScore = optimalScore * 0.7 + acceptableScore * 0.2 + concerningScore * 0.1
         }
         
         return BasicStatistics(
