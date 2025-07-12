@@ -45,15 +45,15 @@ final class StatisticsViewModel: ObservableObject {
     }
     
     // Custom date range properties for each section
-    @Published var qualityTrendsCustomStartDate: Date = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
+    @Published var qualityTrendsCustomStartDate: Date = CalendarUtility.daysAgo(7)
     @Published var qualityTrendsCustomEndDate: Date = Date()
     @Published var showingQualityTrendsCustomDatePicker: Bool = false
     
-    @Published var dailyPatternsCustomStartDate: Date = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
+    @Published var dailyPatternsCustomStartDate: Date = CalendarUtility.daysAgo(7)
     @Published var dailyPatternsCustomEndDate: Date = Date()
     @Published var showingDailyPatternsCustomDatePicker: Bool = false
     
-    @Published var qualityDistributionCustomStartDate: Date = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
+    @Published var qualityDistributionCustomStartDate: Date = CalendarUtility.daysAgo(7)
     @Published var qualityDistributionCustomEndDate: Date = Date()
     @Published var showingQualityDistributionCustomDatePicker: Bool = false
     

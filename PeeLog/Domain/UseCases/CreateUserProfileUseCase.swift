@@ -68,7 +68,7 @@ final class CreateUserProfileUseCase: CreateUserProfileUseCaseProtocol {
             return user
             
         } catch {
-            let context = ErrorContext(operation: "Create User Profile", userAction: "User profile creation")
+            let context = ErrorContextHelper.createUserProfileCreationContext()
             let result = errorHandlingUseCase.handleError(error, context: context)
             throw result.error
         }
@@ -107,7 +107,7 @@ final class CreateUserProfileUseCase: CreateUserProfileUseCaseProtocol {
             return user
             
         } catch {
-            let context = ErrorContext(operation: "Update User Profile", userAction: "User profile update")
+            let context = ErrorContextHelper.createUserProfileUpdateContext()
             let result = errorHandlingUseCase.handleError(error, context: context)
             throw result.error
         }
@@ -122,7 +122,7 @@ final class CreateUserProfileUseCase: CreateUserProfileUseCaseProtocol {
             // This just removes the local profile data
             
         } catch {
-            let context = ErrorContext(operation: "Delete User Profile", userAction: "User profile deletion")
+            let context = ErrorContextHelper.createUserProfileDeletionContext()
             let result = errorHandlingUseCase.handleError(error, context: context)
             throw result.error
         }

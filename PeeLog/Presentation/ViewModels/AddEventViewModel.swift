@@ -97,7 +97,7 @@ class AddEventViewModel: ObservableObject {
     
     // MARK: - Computed Properties
     var isFutureDate: Bool {
-        Calendar.current.isDateInToday(date) || Calendar.current.isDate(date, inSameDayAs: Date())
+        CalendarUtility.isDateInToday(date) || CalendarUtility.isDate(date, inSameDayAs: Date())
     }
     
     var canRequestLocation: Bool {
@@ -110,7 +110,7 @@ class AddEventViewModel: ObservableObject {
     
     // MARK: - Date Validation
     func isFutureCombinedDateTime() -> Bool {
-        let calendar = Calendar.current
+        let calendar = CalendarUtility.current
         let dateComponents = calendar.dateComponents([.year, .month, .day], from: date)
         let timeComponents = calendar.dateComponents([.hour, .minute, .second, .nanosecond], from: time)
         
@@ -140,7 +140,7 @@ class AddEventViewModel: ObservableObject {
     
     private func createPeeEvent() async throws -> PeeEvent {
         // Combine date and time components with full precision
-        let calendar = Calendar.current
+        let calendar = CalendarUtility.current
         let dateComponents = calendar.dateComponents([.year, .month, .day], from: date)
         let timeComponents = calendar.dateComponents([.hour, .minute, .second, .nanosecond], from: time)
         
@@ -203,8 +203,8 @@ class AddEventViewModel: ObservableObject {
     // MARK: - Location Management
     func requestLocationPermission() async {
         guard canRequestLocation else {
-            let context = ErrorContext(operation: "request_location_permission")
-            let error = AppError.permissionDenied("Location permission was previously denied")
+                    let context = ErrorContextHelper.createLocationPermissionContext()
+        let error = AppError.permissionDenied("Location permission was previously denied")
             let result = errorHandlingUseCase.handleError(error, context: context)
             
             errorMessage = result.userMessage

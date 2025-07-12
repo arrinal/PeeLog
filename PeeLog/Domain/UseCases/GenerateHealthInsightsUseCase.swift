@@ -90,8 +90,8 @@ class GenerateHealthInsightsUseCase {
         }
         
         // Weekly consistency insight
-        let calendar = Calendar.current
-        let weekAgo = calendar.date(byAdding: .day, value: -7, to: Date()) ?? Date()
+        // Using CalendarUtility for date operations
+        let weekAgo = CalendarUtility.daysAgo(7)
         let weekEvents = events.filter { event in
             return event.timestamp >= weekAgo
         }

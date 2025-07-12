@@ -86,7 +86,7 @@ final class AuthenticateUserUseCase: AuthenticateUserUseCaseProtocol {
             return authResult
             
         } catch {
-            let context = ErrorContext(operation: "Email Sign In", userAction: "User sign in attempt")
+            let context = ErrorContextHelper.createEmailSignInContext()
             let result = errorHandlingUseCase.handleError(error, context: context)
             
             if let authError = result.error as? AuthError {
@@ -129,7 +129,7 @@ final class AuthenticateUserUseCase: AuthenticateUserUseCaseProtocol {
             return authResult
             
         } catch {
-            let context = ErrorContext(operation: "Email Registration", userAction: "User registration attempt")
+            let context = ErrorContextHelper.createEmailRegistrationContext()
             let result = errorHandlingUseCase.handleError(error, context: context)
             
             if let authError = result.error as? AuthError {
@@ -165,7 +165,7 @@ final class AuthenticateUserUseCase: AuthenticateUserUseCaseProtocol {
             return authResult
             
         } catch {
-            let context = ErrorContext(operation: "Apple Sign In", userAction: "User Apple sign in attempt")
+            let context = ErrorContextHelper.createAppleSignInContext()
             let result = errorHandlingUseCase.handleError(error, context: context)
             
             if let authError = result.error as? AuthError {
@@ -192,7 +192,7 @@ final class AuthenticateUserUseCase: AuthenticateUserUseCaseProtocol {
             return guestUser
             
         } catch {
-            let context = ErrorContext(operation: "Guest Sign In", userAction: "User guest sign in")
+            let context = ErrorContextHelper.createGuestSignInContext()
             let result = errorHandlingUseCase.handleError(error, context: context)
             throw AuthError.unknown(result.userMessage)
         }
@@ -212,7 +212,7 @@ final class AuthenticateUserUseCase: AuthenticateUserUseCaseProtocol {
             // For offline-first approach, we might want to keep local data
             
         } catch {
-            let context = ErrorContext(operation: "Sign Out", userAction: "User sign out")
+            let context = ErrorContextHelper.createSignOutContext()
             let result = errorHandlingUseCase.handleError(error, context: context)
             throw AuthError.unknown(result.userMessage)
         }
@@ -230,7 +230,7 @@ final class AuthenticateUserUseCase: AuthenticateUserUseCaseProtocol {
             authRepository.updateAuthState(.unauthenticated)
             
         } catch {
-            let context = ErrorContext(operation: "Delete Account", userAction: "User delete account")
+            let context = ErrorContextHelper.createDeleteAccountContext()
             let result = errorHandlingUseCase.handleError(error, context: context)
             throw AuthError.unknown(result.userMessage)
         }
@@ -242,7 +242,7 @@ final class AuthenticateUserUseCase: AuthenticateUserUseCaseProtocol {
         do {
             return try await authRepository.refreshToken()
         } catch {
-            let context = ErrorContext(operation: "Refresh Token", userAction: "Token refresh")
+            let context = ErrorContextHelper.createRefreshTokenContext()
             let result = errorHandlingUseCase.handleError(error, context: context)
             throw AuthError.tokenExpired
         }

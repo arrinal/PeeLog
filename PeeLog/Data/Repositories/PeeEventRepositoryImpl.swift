@@ -27,7 +27,7 @@ class PeeEventRepositoryImpl: PeeEventRepository {
     }
     
     func getEventsForToday() -> [PeeEvent] {
-        return getAllEvents().filter { Calendar.current.isDateInToday($0.timestamp) }
+        return getAllEvents().filter { CalendarUtility.isDateInToday($0.timestamp) }
     }
     
     func addEvent(_ event: PeeEvent) throws {

@@ -10,27 +10,40 @@ import Foundation
 // MARK: - Date Filtering Utility
 struct DateFilteringUtility {
     static func filterEventsByPeriod(events: [PeeEvent], period: TimePeriod, customStartDate: Date?, customEndDate: Date?) -> [PeeEvent] {
-        let calendar = Calendar.current
         let now = Date()
         let startDate: Date
         let endDate: Date = now
         
         switch period {
+        case .today:
+            startDate = CalendarUtility.startOfDay(for: now)
+        case .yesterday:
+            let yesterdayStart = CalendarUtility.daysAgo(1)
+            startDate = CalendarUtility.startOfDay(for: yesterdayStart)
+        case .last3Days:
+            let threeDaysAgo = CalendarUtility.daysAgo(3)
+            startDate = CalendarUtility.startOfDay(for: threeDaysAgo)
+        case .lastWeek:
+            let weekAgo = CalendarUtility.daysAgo(7)
+            startDate = CalendarUtility.startOfDay(for: weekAgo)
+        case .lastMonth:
+            let monthAgo = CalendarUtility.monthsAgo(1)
+            startDate = CalendarUtility.startOfDay(for: monthAgo)
         case .week:
-            let sevenDaysAgo = calendar.date(byAdding: .day, value: -7, to: now) ?? now
-            startDate = calendar.startOfDay(for: sevenDaysAgo)
+            let sevenDaysAgo = CalendarUtility.daysAgo(7)
+            startDate = CalendarUtility.startOfDay(for: sevenDaysAgo)
         case .month:
-            let thirtyDaysAgo = calendar.date(byAdding: .day, value: -30, to: now) ?? now
-            startDate = calendar.startOfDay(for: thirtyDaysAgo)
+            let thirtyDaysAgo = CalendarUtility.daysAgo(30)
+            startDate = CalendarUtility.startOfDay(for: thirtyDaysAgo)
         case .quarter:
-            let ninetyDaysAgo = calendar.date(byAdding: .day, value: -90, to: now) ?? now
-            startDate = calendar.startOfDay(for: ninetyDaysAgo)
+            let ninetyDaysAgo = CalendarUtility.daysAgo(90)
+            startDate = CalendarUtility.startOfDay(for: ninetyDaysAgo)
         case .allTime:
             startDate = Date.distantPast
         case .custom:
-            startDate = calendar.startOfDay(for: customStartDate ?? Date.distantPast)
+            startDate = CalendarUtility.startOfDay(for: customStartDate ?? Date.distantPast)
             let customEnd = customEndDate ?? now
-            let endOfCustomDay = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: customEnd) ?? customEnd
+            let endOfCustomDay = CalendarUtility.endOfDay(for: customEnd)
             return events.filter { $0.timestamp >= startDate && $0.timestamp <= endOfCustomDay }
         }
         
@@ -51,10 +64,7 @@ class GenerateQualityTrendsUseCase {
         guard !filteredEvents.isEmpty else { return [] }
         
         // Group events by day and calculate average quality for each day
-        let calendar = Calendar.current
-        let groupedEvents = Dictionary(grouping: filteredEvents) { event in
-            calendar.startOfDay(for: event.timestamp)
-        }
+        let groupedEvents = CalendarUtility.groupEventsByDay(filteredEvents, dateKeyPath: \.timestamp)
         
         return groupedEvents.map { (date, events) in
             let averageQuality = events.map { $0.quality.numericValue }.reduce(0, +) / Double(events.count)
@@ -63,14 +73,7 @@ class GenerateQualityTrendsUseCase {
     }
 }
 
-// Time period enum
-enum TimePeriod: String, CaseIterable {
-    case week = "Last 7 Days"
-    case month = "Last 30 Days"
-    case quarter = "Last 90 Days"
-    case allTime = "All Time"
-    case custom = "Custom Range"
-}
+// Using shared TimePeriod enum from Domain/Entities/TimePeriod.swift
 
 // Data structure for quality trend points
 struct QualityTrendPoint: Identifiable {

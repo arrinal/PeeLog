@@ -8,48 +8,15 @@
 import SwiftUI
 import SwiftData
 
-enum TimeRangeFilter: String, CaseIterable {
-    case today = "Today"
-    case yesterday = "Yesterday"
-    case last3Days = "Last 3 Days"
-    case lastWeek = "Last Week"
-    case lastMonth = "Last Month"
-    case custom = "Custom Range"
-    
-    var dateRange: (start: Date, end: Date) {
-        let calendar = Calendar.current
-        let now = Date()
-        
-        switch self {
-        case .today:
-            let start = calendar.startOfDay(for: now)
-            return (start, now)
-        case .yesterday:
-            let start = calendar.date(byAdding: .day, value: -1, to: calendar.startOfDay(for: now))!
-            let end = calendar.date(byAdding: .day, value: 1, to: start)!
-            return (start, end)
-        case .last3Days:
-            let start = calendar.date(byAdding: .day, value: -3, to: now)!
-            return (start, now)
-        case .lastWeek:
-            let start = calendar.date(byAdding: .day, value: -7, to: now)!
-            return (start, now)
-        case .lastMonth:
-            let start = calendar.date(byAdding: .month, value: -1, to: now)!
-            return (start, now)
-        case .custom:
-            return (calendar.date(byAdding: .day, value: -7, to: now)!, now)
-        }
-    }
-}
+// Using shared TimePeriod enum from Domain/Entities/TimePeriod.swift
 
 struct HistoryView: View {
     @Environment(\.dependencyContainer) private var container
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
     @Query(sort: \PeeEvent.timestamp, order: .reverse) private var allEvents: [PeeEvent]
-    @State private var selectedFilter: TimeRangeFilter = .today
-    @State private var customStartDate: Date = Calendar.current.date(byAdding: .day, value: -7, to: Date())!
+    @State private var selectedFilter: TimePeriod = .today
+    @State private var customStartDate: Date = CalendarUtility.daysAgo(7)
     @State private var customEndDate: Date = Date()
     @State private var selectedEvent: PeeEvent?
     @State private var showingMapSheet = false
@@ -235,10 +202,7 @@ struct HistoryView: View {
     }
     
     private func groupEventsByDay() -> [(date: Date, events: [PeeEvent])] {
-        let calendar = Calendar.current
-        let grouped = Dictionary(grouping: filteredEvents) { event in
-            calendar.startOfDay(for: event.timestamp)
-        }
+        let grouped = CalendarUtility.groupEventsByDay(filteredEvents, dateKeyPath: \.timestamp)
         
         return grouped.map { (date: $0, events: $1) }
             .sorted { $0.date > $1.date }
@@ -246,7 +210,7 @@ struct HistoryView: View {
     
     private func formattedDate(_ date: Date) -> String {
         let formatter = DateFormatter()
-        let calendar = Calendar.current
+        let calendar = CalendarUtility.current
         
         if calendar.isDateInToday(date) {
             return "Today"
@@ -318,7 +282,7 @@ struct DayGroupCard: View {
     
     private func formattedDate(_ date: Date) -> String {
         let formatter = DateFormatter()
-        let calendar = Calendar.current
+        let calendar = CalendarUtility.current
         
         if calendar.isDateInToday(date) {
             return "Today"
@@ -334,11 +298,12 @@ struct DayGroupCard: View {
         guard !events.isEmpty else { return "No data" }
         
         // Based on medical research: pale yellow is optimal, clear is overhydrated
-        let optimalCount = events.filter { $0.quality == .paleYellow }.count
-        let overhydratedCount = events.filter { $0.quality == .clear }.count
-        let mildlyDehydratedCount = events.filter { $0.quality == .yellow }.count
-        let dehydratedCount = events.filter { $0.quality == .darkYellow }.count
-        let severelyDehydratedCount = events.filter { $0.quality == .amber }.count
+        let summary = QualityFilteringUtility.getQualityDistributionSummary(from: events)
+        let optimalCount = summary.optimalCount
+        let overhydratedCount = summary.overhydratedCount
+        let mildlyDehydratedCount = summary.mildlyDehydratedCount
+        let dehydratedCount = summary.dehydratedCount
+        let severelyDehydratedCount = summary.severelyDehydratedCount
         let totalCount = events.count
         
         let optimalPercentage = Double(optimalCount) / Double(totalCount)
@@ -365,11 +330,12 @@ struct DayGroupCard: View {
     private func dayQualityColor() -> Color {
         guard !events.isEmpty else { return .gray }
         
-        let optimalCount = events.filter { $0.quality == .paleYellow }.count
-        let overhydratedCount = events.filter { $0.quality == .clear }.count
-        let mildlyDehydratedCount = events.filter { $0.quality == .yellow }.count
-        let dehydratedCount = events.filter { $0.quality == .darkYellow }.count
-        let severelyDehydratedCount = events.filter { $0.quality == .amber }.count
+        let summary = QualityFilteringUtility.getQualityDistributionSummary(from: events)
+        let optimalCount = summary.optimalCount
+        let overhydratedCount = summary.overhydratedCount
+        let mildlyDehydratedCount = summary.mildlyDehydratedCount
+        let dehydratedCount = summary.dehydratedCount
+        let severelyDehydratedCount = summary.severelyDehydratedCount
         let totalCount = events.count
         
         let optimalPercentage = Double(optimalCount) / Double(totalCount)
@@ -489,7 +455,7 @@ struct HistoryEventCard: View {
 
 // MARK: - Filter Sheet
 struct FilterSheet: View {
-    @Binding var selectedFilter: TimeRangeFilter
+    @Binding var selectedFilter: TimePeriod
     @Binding var customStartDate: Date
     @Binding var customEndDate: Date
     @Binding var isPresented: Bool
@@ -517,7 +483,7 @@ struct FilterSheet: View {
                         
                         // Filter Options
                         VStack(spacing: 12) {
-                            ForEach(TimeRangeFilter.allCases, id: \.self) { filter in
+                            ForEach(TimePeriod.historyFilterOptions, id: \.self) { filter in
                                 Button(action: {
                                     withAnimation(.spring(dampingFraction: 0.7)) {
                                         selectedFilter = filter
@@ -661,7 +627,7 @@ struct FilterSheet: View {
             .shadow(color: colorScheme == .dark ? Color.white.opacity(0.02) : Color.black.opacity(0.04), radius: 4, x: 0, y: 2)
     }
     
-    private func dateRangeDescription(for filter: TimeRangeFilter) -> String {
+    private func dateRangeDescription(for filter: TimePeriod) -> String {
         let formatter = DateFormatter()
         formatter.dateStyle = .short
         

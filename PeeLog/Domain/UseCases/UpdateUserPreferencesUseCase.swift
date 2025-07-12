@@ -49,7 +49,7 @@ final class UpdateUserPreferencesUseCase: UpdateUserPreferencesUseCaseProtocol {
             return user
             
         } catch {
-            let context = ErrorContext(operation: "Update User Preferences", userAction: "User preferences update")
+            let context = ErrorContextHelper.createUpdateUserPreferencesContext()
             let result = errorHandlingUseCase.handleError(error, context: context)
             throw result.error
         }
