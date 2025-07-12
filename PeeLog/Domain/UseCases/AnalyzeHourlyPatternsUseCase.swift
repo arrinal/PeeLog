@@ -18,9 +18,7 @@ class AnalyzeHourlyPatternsUseCase {
             customStartDate: customStartDate, 
             customEndDate: customEndDate
         )
-        let groupedByHour = Dictionary(grouping: filteredEvents) { event in
-            Calendar.current.component(.hour, from: event.timestamp)
-        }
+        let groupedByHour = CalendarUtility.groupEventsByHour(filteredEvents, dateKeyPath: \.timestamp)
         
         return (0...23).map { hour in
             HourlyData(hour: hour, count: groupedByHour[hour]?.count ?? 0)

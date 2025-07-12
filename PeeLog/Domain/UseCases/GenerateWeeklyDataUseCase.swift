@@ -18,16 +18,16 @@ class GenerateWeeklyDataUseCase {
     }
     
     func execute(events: [PeeEvent]) -> [WeeklyData] {
-        let calendar = Calendar.current
+        // Using CalendarUtility for date operations
         let today = Date()
         
         return (0..<7).map { dayOffset in
-            let date = calendar.date(byAdding: .day, value: -dayOffset, to: today) ?? today
-            let dayOfWeek = calendar.component(.weekday, from: date)
-            let dayName = calendar.shortWeekdaySymbols[dayOfWeek - 1]
+            let date = CalendarUtility.date(byAddingDays: -dayOffset, to: today) ?? today
+            let dayOfWeek = CalendarUtility.current.component(.weekday, from: date)
+            let dayName = CalendarUtility.current.shortWeekdaySymbols[dayOfWeek - 1]
             
             let dayEvents = events.filter { event in
-                calendar.isDate(event.timestamp, inSameDayAs: date)
+                CalendarUtility.isDate(event.timestamp, inSameDayAs: date)
             }
             
             let averageQuality = dayEvents.isEmpty ? 0.0 : 

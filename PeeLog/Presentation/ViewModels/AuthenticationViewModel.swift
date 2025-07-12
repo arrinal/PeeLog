@@ -366,7 +366,7 @@ final class AuthenticationViewModel: ObservableObject {
     // MARK: - Helper Methods
     
     private func handleError(_ error: Error) {
-        let context = ErrorContext(operation: "Authentication", userAction: "User authentication")
+        let context = ErrorContextHelper.createAuthenticationContext(operation: "Authentication")
         let result = errorHandlingUseCase.handleError(error, context: context)
         errorMessage = result.userMessage
         showError = true

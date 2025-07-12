@@ -100,7 +100,7 @@ final class MigrateGuestDataUseCase: MigrateGuestDataUseCaseProtocol {
             
             // Step 1: Get all guest user's pee events
             let guestEvents = peeEventRepository.getAllEvents()
-            let guestEventsForUser = guestEvents.filter { $0.timestamp != nil } // Filter valid events
+            let guestEventsForUser = guestEvents // All events have non-nil timestamps
             
             migrationStatus = .migratingUser
             
@@ -114,7 +114,7 @@ final class MigrateGuestDataUseCase: MigrateGuestDataUseCaseProtocol {
             migrationStatus = .transferringEvents
             
             // Step 4: Update all guest events to belong to authenticated user
-            for event in guestEventsForUser {
+            for _ in guestEventsForUser {
                 // Note: We'll need to add a user relationship to PeeEvent in the future
                 // For now, events are local to the device, so they remain accessible
                 // This is where we would update event.userId = authenticatedUser.id if we had that field
@@ -136,7 +136,7 @@ final class MigrateGuestDataUseCase: MigrateGuestDataUseCaseProtocol {
             migrationStatus = .completed
             
         } catch {
-            let context = ErrorContext(operation: "Migrate Guest Data", userAction: "Guest data migration")
+            let context = ErrorContextHelper.createMigrateGuestDataContext()
             let result = errorHandlingUseCase.handleError(error, context: context)
             migrationStatus = .failed(result.userMessage)
             throw result.error

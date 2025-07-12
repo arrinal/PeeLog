@@ -411,7 +411,7 @@ final class ProfileViewModel: ObservableObject {
     // MARK: - Helper Methods
     
     private func handleError(_ error: Error) {
-        let context = ErrorContext(operation: "Profile Management", userAction: "User profile operation")
+        let context = ErrorContextHelper.createProfileContext()
         let result = errorHandlingUseCase.handleError(error, context: context)
         errorMessage = result.userMessage
         showError = true

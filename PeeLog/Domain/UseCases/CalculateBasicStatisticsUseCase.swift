@@ -19,10 +19,7 @@ class CalculateBasicStatisticsUseCase {
     func execute(events: [PeeEvent]) -> BasicStatistics {
         let totalEvents = events.count
         
-        let calendar = Calendar.current
-        let now = Date()
-        let weekAgo = calendar.date(byAdding: .day, value: -7, to: now) ?? now
-        
+        let weekAgo = CalendarUtility.daysAgo(7)
         let thisWeekEvents = events.filter { $0.timestamp >= weekAgo }.count
         
         var averageDaily: Double = 0.0
@@ -30,9 +27,7 @@ class CalculateBasicStatisticsUseCase {
         
         if !events.isEmpty {
             // Group events by day to count only days with actual events
-            let eventsByDay = Dictionary(grouping: events) { event in
-                calendar.startOfDay(for: event.timestamp)
-            }
+            let eventsByDay = CalendarUtility.groupEventsByDay(events, dateKeyPath: \.timestamp)
             
             // Calculate average based only on days that have events (exclude zero-event days)
             let daysWithEvents = eventsByDay.count
@@ -40,9 +35,9 @@ class CalculateBasicStatisticsUseCase {
             
             // Calculate health score based on quality distribution
             // Only pale yellow is considered optimal hydration
-            let optimalEvents = events.filter { $0.quality == .paleYellow }
-            let acceptableEvents = events.filter { $0.quality == .clear || $0.quality == .paleYellow }
-            let concerningEvents = events.filter { $0.quality == .yellow || $0.quality == .darkYellow || $0.quality == .amber }
+            let optimalEvents = QualityFilteringUtility.getOptimalEvents(from: events)
+            let acceptableEvents = QualityFilteringUtility.getAcceptableEvents(from: events)
+            let concerningEvents = QualityFilteringUtility.getConcerningEvents(from: events)
             
             // Health score calculation based on medical guidelines
             let optimalScore = Double(optimalEvents.count) / Double(totalEvents) * 1.0
