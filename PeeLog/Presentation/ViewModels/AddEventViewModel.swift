@@ -204,7 +204,7 @@ class AddEventViewModel: ObservableObject {
     func requestLocationPermission() async {
         guard canRequestLocation else {
                     let context = ErrorContextHelper.createLocationPermissionContext()
-        let error = AppError.permissionDenied("Location permission was previously denied")
+            let error = AppError.permissionDenied("Location permission was previously denied")
             let result = errorHandlingUseCase.handleError(error, context: context)
             
             errorMessage = result.userMessage

@@ -36,6 +36,13 @@ protocol AuthenticateUserUseCaseProtocol {
     func getCurrentUser() async -> User?
     func isEmailValid(_ email: String) -> Bool
     func isPasswordValid(_ password: String) -> Bool
+    func sendPasswordReset(toEmail email: String) async throws
+    func sendEmailVerification() async throws
+    func sendEmailVerification(toEmail email: String, password: String) async throws
+    func isEmailVerified() -> Bool
+    func checkEmailVerificationStatus() async throws -> Bool
+    func checkEmailVerificationStatus(email: String, password: String) async throws -> Bool
+    func reloadUser() async throws
 }
 
 // MARK: - Authentication Use Case Implementation
@@ -89,7 +96,7 @@ final class AuthenticateUserUseCase: AuthenticateUserUseCaseProtocol {
             let context = ErrorContextHelper.createEmailSignInContext()
             let result = errorHandlingUseCase.handleError(error, context: context)
             
-            if let authError = result.error as? AuthError {
+            if let authError = error as? AuthError {
                 authRepository.updateAuthState(.error(authError))
                 throw authError
             } else {
@@ -117,14 +124,8 @@ final class AuthenticateUserUseCase: AuthenticateUserUseCaseProtocol {
             // Attempt registration
             let authResult = try await authRepository.registerWithEmail(email, password: password, displayName: displayName)
             
-            // Save user locally
-            try await userRepository.saveUser(authResult.user)
-            
-            // Update auth state to authenticated
-            authRepository.updateAuthState(.authenticated(authResult.user))
-            
-            // Initial sync to server
-            try? await userRepository.syncUserData()
+            // Don't save user locally or update auth state since user is not verified yet
+            // These will be done when the user actually signs in after verification
             
             return authResult
             
@@ -132,7 +133,7 @@ final class AuthenticateUserUseCase: AuthenticateUserUseCaseProtocol {
             let context = ErrorContextHelper.createEmailRegistrationContext()
             let result = errorHandlingUseCase.handleError(error, context: context)
             
-            if let authError = result.error as? AuthError {
+            if let authError = error as? AuthError {
                 authRepository.updateAuthState(.error(authError))
                 throw authError
             } else {
@@ -168,7 +169,7 @@ final class AuthenticateUserUseCase: AuthenticateUserUseCaseProtocol {
             let context = ErrorContextHelper.createAppleSignInContext()
             let result = errorHandlingUseCase.handleError(error, context: context)
             
-            if let authError = result.error as? AuthError {
+            if let authError = error as? AuthError {
                 authRepository.updateAuthState(.error(authError))
                 throw authError
             } else {
@@ -243,7 +244,7 @@ final class AuthenticateUserUseCase: AuthenticateUserUseCaseProtocol {
             return try await authRepository.refreshToken()
         } catch {
             let context = ErrorContextHelper.createRefreshTokenContext()
-            let result = errorHandlingUseCase.handleError(error, context: context)
+            let _ = errorHandlingUseCase.handleError(error, context: context)
             throw AuthError.tokenExpired
         }
     }
@@ -266,5 +267,71 @@ final class AuthenticateUserUseCase: AuthenticateUserUseCaseProtocol {
     
     func isPasswordValid(_ password: String) -> Bool {
         return ValidationUtility.isPasswordValid(password)
+    }
+    
+    func sendPasswordReset(toEmail email: String) async throws {
+        do {
+            try await authRepository.sendPasswordReset(toEmail: email)
+        } catch {
+            let context = ErrorContextHelper.createPasswordResetContext()
+            let result = errorHandlingUseCase.handleError(error, context: context)
+            throw AuthError.unknown(result.userMessage)
+        }
+    }
+    
+    // MARK: - Email Verification
+    
+    func sendEmailVerification() async throws {
+        do {
+            try await authRepository.sendEmailVerification()
+        } catch {
+            let context = ErrorContextHelper.createEmailVerificationContext()
+            let result = errorHandlingUseCase.handleError(error, context: context)
+            throw AuthError.unknown(result.userMessage)
+        }
+    }
+    
+    func sendEmailVerification(toEmail email: String, password: String) async throws {
+        do {
+            try await authRepository.sendEmailVerification(toEmail: email, password: password)
+        } catch {
+            let context = ErrorContextHelper.createEmailVerificationContext()
+            let result = errorHandlingUseCase.handleError(error, context: context)
+            throw AuthError.unknown(result.userMessage)
+        }
+    }
+    
+    func isEmailVerified() -> Bool {
+        return authRepository.isEmailVerified()
+    }
+    
+    func checkEmailVerificationStatus() async throws -> Bool {
+        do {
+            return try await authRepository.checkEmailVerificationStatus()
+        } catch {
+            let context = ErrorContextHelper.createEmailVerificationContext()
+            let result = errorHandlingUseCase.handleError(error, context: context)
+            throw AuthError.unknown(result.userMessage)
+        }
+    }
+    
+    func checkEmailVerificationStatus(email: String, password: String) async throws -> Bool {
+        do {
+            return try await authRepository.checkEmailVerificationStatus(email: email, password: password)
+        } catch {
+            let context = ErrorContextHelper.createEmailVerificationContext()
+            let result = errorHandlingUseCase.handleError(error, context: context)
+            throw AuthError.unknown(result.userMessage)
+        }
+    }
+    
+    func reloadUser() async throws {
+        do {
+            try await authRepository.reloadUser()
+        } catch {
+            let context = ErrorContextHelper.createEmailVerificationContext()
+            let result = errorHandlingUseCase.handleError(error, context: context)
+            throw AuthError.unknown(result.userMessage)
+        }
     }
 } 

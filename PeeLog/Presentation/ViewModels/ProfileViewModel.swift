@@ -432,3 +432,4 @@ final class ProfileViewModel: ObservableObject {
         return authenticateUserUseCase.isEmailValid(email)
     }
 } 
+ 
