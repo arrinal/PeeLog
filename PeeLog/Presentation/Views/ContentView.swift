@@ -83,8 +83,8 @@ struct ContentView: View {
             ProfileView(viewModel: container.makeProfileViewModel(modelContext: modelContext))
                 .tabItem {
                     Label("Profile", systemImage: "person.circle.fill")
-                }
         }
+    }
     }
     
     private func checkAuthenticationState() async {

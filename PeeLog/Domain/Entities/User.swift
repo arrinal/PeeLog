@@ -153,9 +153,18 @@ final class User: Codable {
     
     /// Creates a user from email/password registration
     static func createEmailUser(email: String, displayName: String? = nil) -> User {
+        // Only use email fallback if no display name is provided at all
+        // Don't override empty string or whitespace-only names
+        let finalDisplayName: String?
+        if let displayName = displayName, !displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            finalDisplayName = displayName
+        } else {
+            finalDisplayName = email.components(separatedBy: "@").first
+        }
+        
         return User(
             email: email,
-            displayName: displayName ?? email.components(separatedBy: "@").first,
+            displayName: finalDisplayName,
             authProvider: .email,
             preferences: UserPreferences.default
         )
@@ -263,3 +272,4 @@ extension User {
 }
 
 // MARK: - AuthProvider Extensions 
+ 

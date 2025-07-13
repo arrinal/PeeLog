@@ -107,30 +107,224 @@ struct AuthenticationView: View {
                 break
             }
         }
+        .sheet(isPresented: $viewModel.showForgotPassword) {
+            forgotPasswordSheet
+        }
+        .sheet(isPresented: $viewModel.showEmailVerification) {
+            emailVerificationSheet
+        }
         .alert("Error", isPresented: $viewModel.showError) {
-            Button("OK") {
-                viewModel.clearErrors()
-            }
+            Button("OK") { }
         } message: {
             Text(viewModel.errorMessage)
         }
-        .alert("Migrate Your Data?", isPresented: $viewModel.showGuestMigrationAlert) {
-            Button("Migrate Data") {
+        .alert("Migrate Guest Data", isPresented: $viewModel.showGuestMigrationAlert) {
+            Button("Migrate") {
                 Task {
                     await viewModel.proceedWithMigration()
                 }
             }
-            Button("Skip Migration") {
+            Button("Skip", role: .cancel) {
                 Task {
                     await viewModel.skipMigration()
                 }
             }
-            Button("Cancel", role: .cancel) {
-                viewModel.showGuestMigrationAlert = false
-            }
         } message: {
             Text("You have existing guest data. Would you like to migrate it to your new account?")
         }
+
+    }
+    
+    // MARK: - Forgot Password Sheet
+    
+    @ViewBuilder
+    private var forgotPasswordSheet: some View {
+        NavigationView {
+            VStack(spacing: 24) {
+                // Header
+                VStack(spacing: 8) {
+                    Image(systemName: "envelope.circle.fill")
+                        .font(.system(size: 50))
+                        .foregroundColor(.blue)
+                    
+                    Text("Reset Password")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                    
+                    Text("Enter your email address and we'll send you a link to reset your password.")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+                }
+                .padding(.top, 40)
+                
+                // Email Input
+                VStack(alignment: .leading, spacing: 8) {
+                    TextField("Email Address", text: $viewModel.forgotPasswordEmail)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                        .keyboardType(.emailAddress)
+                        .autocapitalization(.none)
+                        .disableAutocorrection(true)
+                    
+                    if !viewModel.forgotPasswordMessage.isEmpty {
+                        Text(viewModel.forgotPasswordMessage)
+                            .font(.caption)
+                            .foregroundColor(viewModel.showForgotPasswordSuccess ? .green : .red)
+                    }
+                }
+                .padding(.horizontal)
+                
+                // Send Reset Button
+                Button(action: {
+                    Task {
+                        await viewModel.sendPasswordReset()
+                    }
+                }) {
+                    HStack {
+                        if viewModel.isLoading {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                .scaleEffect(0.8)
+                        }
+                        Text("Send Reset Email")
+                            .font(.headline)
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 50)
+                    .background(viewModel.forgotPasswordEmail.isEmpty ? Color.gray : Color.blue)
+                    .cornerRadius(10)
+                }
+                .disabled(viewModel.forgotPasswordEmail.isEmpty || viewModel.isLoading)
+                .padding(.horizontal)
+                
+                Spacer()
+            }
+            .navigationTitle("Forgot Password")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Close") {
+                        viewModel.resetForgotPasswordForm()
+                    }
+                }
+            }
+        }
+        .presentationDetents([.medium])
+    }
+    
+    // MARK: - Email Verification Sheet
+    
+    @ViewBuilder
+    private var emailVerificationSheet: some View {
+        NavigationView {
+            VStack(spacing: 24) {
+                // Header
+                VStack(spacing: 8) {
+                    Image(systemName: "envelope.badge.checkmark.fill")
+                        .font(.system(size: 50))
+                        .foregroundColor(.green)
+                    
+                    Text("Verify Your Email")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                    
+                    Text("We've sent a verification email to:")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                    
+                    Text(viewModel.verificationEmail)
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundColor(.primary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+                }
+                .padding(.top, 40)
+                
+                // Instructions
+                VStack(spacing: 16) {
+                    Text("Please check your email and click the verification link to complete your account setup.")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+                    
+                    if !viewModel.verificationMessage.isEmpty {
+                        Text(viewModel.verificationMessage)
+                            .font(.caption)
+                            .foregroundColor(viewModel.verificationMessage.contains("successfully") ? .green : .red)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal)
+                    }
+                }
+                
+                // Action Buttons
+                VStack(spacing: 16) {
+                    // Check Verification Status Button
+                    Button(action: {
+                        Task {
+                            await viewModel.checkEmailVerificationStatus()
+                        }
+                    }) {
+                        HStack {
+                            if viewModel.isLoading {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                    .scaleEffect(0.8)
+                            }
+                            Text("I've Verified My Email")
+                                .font(.headline)
+                        }
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 50)
+                        .background(Color.green)
+                        .cornerRadius(10)
+                    }
+                    .disabled(viewModel.isLoading)
+                    .padding(.horizontal)
+                    
+                    // Resend Verification Button
+                    Button(action: {
+                        Task {
+                            await viewModel.resendVerificationEmail()
+                        }
+                    }) {
+                        HStack {
+                            if viewModel.isResendingVerification {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: .blue))
+                                    .scaleEffect(0.8)
+                            }
+                            Text(viewModel.canResendVerification ? "Resend Verification Email" : "Resend in \(viewModel.resendCountdown)s")
+                                .font(.subheadline)
+                        }
+                        .foregroundColor(.blue)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 44)
+                        .background(Color.blue.opacity(0.1))
+                        .cornerRadius(8)
+                    }
+                    .disabled(!viewModel.canResendVerification || viewModel.isResendingVerification)
+                    .padding(.horizontal)
+                }
+                
+                Spacer()
+            }
+            .navigationTitle("Email Verification")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Close") {
+                        viewModel.resetEmailVerificationForm()
+                    }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
     }
     
     @ViewBuilder
@@ -246,22 +440,25 @@ struct AuthenticationView: View {
                     }
                 }
             }) {
-                HStack {
-                    if viewModel.isLoading {
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                            .scaleEffect(0.8)
-                    }
-                    Text(viewModel.buttonTitle)
-                        .fontWeight(.semibold)
-                }
-                .frame(maxWidth: .infinity)
-                .padding()
-                .background(viewModel.isFormValid ? Color.blue : Color.gray)
-                .foregroundColor(.white)
-                .cornerRadius(8)
+                Text(viewModel.buttonTitle)
+                    .font(.headline)
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 50)
+                    .background(viewModel.isFormValid ? Color.blue : Color.gray)
+                    .cornerRadius(10)
             }
             .disabled(!viewModel.isFormValid || viewModel.isLoading)
+            
+            // Forgot Password Button (only in login mode)
+            if viewModel.isLoginMode {
+                Button("Forgot Password?") {
+                    viewModel.showForgotPassword = true
+                }
+                .font(.footnote)
+                .foregroundColor(.blue)
+                .padding(.top, 8)
+            }
             
             // Mode Toggle Text
             Button(viewModel.toggleModeText) {

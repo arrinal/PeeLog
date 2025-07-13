@@ -74,10 +74,10 @@ final class AuthRepositoryImpl: AuthRepository {
     
     private func checkExistingAuthState() {
         Task {
-            // Check if there's a current Firebase user
-            if let firebaseUser = firebaseAuthService.getCurrentUser() {
-                await handleFirebaseSignIn()
-            } else {
+                    // Check if there's a current Firebase user
+        if firebaseAuthService.getCurrentUser() != nil {
+            await handleFirebaseSignIn()
+        } else {
                 // Check for local guest user
                 if let guestUser = await getLocalGuestUser() {
                     updateAuthState(.guest(guestUser))
@@ -92,25 +92,37 @@ final class AuthRepositoryImpl: AuthRepository {
         guard let firebaseUser = firebaseAuthService.getCurrentUser() else { return }
         
         do {
+            // Reload user to get fresh data including display name
+            try await firebaseAuthService.reloadUser()
+            
+            // Get updated user info after reload
+            let updatedFirebaseUser = firebaseAuthService.getCurrentUser() ?? firebaseUser
+            
             // Try to find existing user in local storage
-            if let existingUser = await getUserByEmail(firebaseUser.email) {
+            if let existingUser = await getUserByEmail(updatedFirebaseUser.email) {
+                // Update display name if it's different from Firebase
+                if existingUser.displayName != updatedFirebaseUser.displayName {
+                    existingUser.displayName = updatedFirebaseUser.displayName
+                    try await updateUserLocally(existingUser)
+                }
                 updateAuthState(.authenticated(existingUser))
             } else {
                 // Create new user from Firebase user
                 // Check the Firebase provider info to determine the correct auth provider
                 let user: User
-                if firebaseUser.providerData.contains(where: { $0.providerID == "apple.com" }) {
+                if updatedFirebaseUser.providerData.contains(where: { $0.providerID == "apple.com" }) {
                     // User signed in with Apple
                     user = User.createAppleUser(
-                        appleUserId: firebaseUser.uid,
-                        email: firebaseUser.email,
-                        displayName: firebaseUser.displayName
+                        appleUserId: updatedFirebaseUser.uid,
+                        email: updatedFirebaseUser.email,
+                        displayName: updatedFirebaseUser.displayName
                     )
                 } else {
                     // User signed in with email/password
+                    // Use the updated Firebase user with fresh display name
                     user = User.createEmailUser(
-                        email: firebaseUser.email ?? "",
-                        displayName: firebaseUser.displayName
+                        email: updatedFirebaseUser.email ?? "",
+                        displayName: updatedFirebaseUser.displayName
                     )
                 }
                 
@@ -139,16 +151,27 @@ final class AuthRepositoryImpl: AuthRepository {
         
         do {
             let firebaseUser = try await firebaseAuthService.signInWithEmail(email, password: password)
+            
+            // Reload user to get fresh data including display name
+            try await firebaseAuthService.reloadUser()
+            
+            // Get updated user info after reload
+            let updatedFirebaseUser = firebaseAuthService.getCurrentUser() ?? firebaseUser
             let accessToken = try await firebaseAuthService.getIDToken()
             
             // Get or create local user
             let user: User
             if let existingUser = await getUserByEmail(email) {
+                // Update display name if it's different from Firebase
+                if existingUser.displayName != updatedFirebaseUser.displayName {
+                    existingUser.displayName = updatedFirebaseUser.displayName
+                    try await updateUserLocally(existingUser)
+                }
                 user = existingUser
             } else {
                 user = User.createEmailUser(
                     email: email,
-                    displayName: firebaseUser.displayName
+                    displayName: updatedFirebaseUser.displayName
                 )
                 try await saveUserLocally(user)
             }
@@ -175,24 +198,29 @@ final class AuthRepositoryImpl: AuthRepository {
             let firebaseUser = try await firebaseAuthService.createUserWithEmail(email, password: password)
             
             // Update Firebase profile if display name provided
-            if let displayName = displayName {
+            if let displayName = displayName, !displayName.isEmpty {
                 try await firebaseAuthService.updateDisplayName(displayName)
+                // Reload user to ensure the display name is properly set
+                try await firebaseAuthService.reloadUser()
             }
             
-            let accessToken = try await firebaseAuthService.getIDToken()
+            // Send email verification
+            try await firebaseAuthService.sendEmailVerification(to: firebaseUser)
             
-            // Create local user
+            // Sign out the user since they need to verify email first
+            try await firebaseAuthService.signOut()
+            
+            // Create local user (but don't authenticate them yet)
             let user = User.createEmailUser(
                 email: email,
                 displayName: displayName
             )
             
-            try await saveUserLocally(user)
-            updateAuthState(.authenticated(user))
-            
+            // Don't save locally or update auth state since user is not verified yet
+            // Return empty token since user is not authenticated
             return AuthResult(
                 user: user,
-                accessToken: accessToken
+                accessToken: ""
             )
             
         } catch {
@@ -301,6 +329,79 @@ final class AuthRepositoryImpl: AuthRepository {
             
             updateAuthState(.unauthenticated)
             
+        } catch {
+            throw error as? AuthError ?? AuthError.unknown(error.localizedDescription)
+        }
+    }
+    
+    // MARK: - Password Reset
+    
+    func sendPasswordReset(toEmail email: String) async throws {
+        do {
+            // Validate email format
+            guard isEmailValid(email) else {
+                throw AuthError.invalidEmail
+            }
+            
+            // Send password reset email via Firebase
+            try await firebaseAuthService.sendPasswordReset(toEmail: email)
+            
+        } catch {
+            throw error as? AuthError ?? AuthError.unknown(error.localizedDescription)
+        }
+    }
+    
+    // MARK: - Email Verification
+    
+    func sendEmailVerification() async throws {
+        do {
+            try await firebaseAuthService.sendEmailVerification()
+        } catch {
+            throw error as? AuthError ?? AuthError.unknown(error.localizedDescription)
+        }
+    }
+    
+    func sendEmailVerification(to user: User) async throws {
+        do {
+            // For local User object, we need to use the current Firebase user
+            // Since we can't directly use our User object with Firebase methods
+            try await firebaseAuthService.sendEmailVerification()
+        } catch {
+            throw error as? AuthError ?? AuthError.unknown(error.localizedDescription)
+        }
+    }
+    
+    func sendEmailVerification(toEmail email: String, password: String) async throws {
+        do {
+            try await firebaseAuthService.sendEmailVerification(toEmail: email, password: password)
+        } catch {
+            throw error as? AuthError ?? AuthError.unknown(error.localizedDescription)
+        }
+    }
+    
+    func isEmailVerified() -> Bool {
+        return firebaseAuthService.isEmailVerified()
+    }
+    
+    func checkEmailVerificationStatus() async throws -> Bool {
+        do {
+            return try await firebaseAuthService.checkEmailVerificationStatus()
+        } catch {
+            throw error as? AuthError ?? AuthError.unknown(error.localizedDescription)
+        }
+    }
+    
+    func checkEmailVerificationStatus(email: String, password: String) async throws -> Bool {
+        do {
+            return try await firebaseAuthService.checkEmailVerificationStatus(email: email, password: password)
+        } catch {
+            throw error as? AuthError ?? AuthError.unknown(error.localizedDescription)
+        }
+    }
+    
+    func reloadUser() async throws {
+        do {
+            try await firebaseAuthService.reloadUser()
         } catch {
             throw error as? AuthError ?? AuthError.unknown(error.localizedDescription)
         }

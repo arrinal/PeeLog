@@ -343,3 +343,4 @@ struct ProfileView: View {
         .environment(\.dependencyContainer, container)
         .modelContainer(modelContainer)
 } 
+ 

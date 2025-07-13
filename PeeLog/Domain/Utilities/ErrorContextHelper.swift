@@ -28,7 +28,24 @@ struct ErrorContextHelper {
     }
     
     static func createAppleSignInContext() -> ErrorContext {
-        return createAuthenticationContext(operation: "Apple Sign In", userAction: "User Apple sign in attempt")
+        return ErrorContext(
+            operation: "Apple Sign In",
+            userAction: "Please try signing in with Apple again"
+        )
+    }
+    
+    static func createPasswordResetContext() -> ErrorContext {
+        return ErrorContext(
+            operation: "Password Reset",
+            userAction: "Please check your email format and try again"
+        )
+    }
+    
+    static func createEmailVerificationContext() -> ErrorContext {
+        return ErrorContext(
+            operation: "Email Verification",
+            userAction: "Please check your email and try again"
+        )
     }
     
     static func createGuestSignInContext() -> ErrorContext {
