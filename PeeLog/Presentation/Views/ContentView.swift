@@ -7,12 +7,14 @@
 
 import SwiftUI
 import SwiftData
+import Combine
 
 struct ContentView: View {
     @Environment(\.dependencyContainer) private var container
     @Environment(\.modelContext) private var modelContext
     @State private var authState: AuthenticationState = .checking
     @State private var currentUser: User?
+    @State private var cancellables = Set<AnyCancellable>()
     
     var body: some View {
         Group {
@@ -33,11 +35,7 @@ struct ContentView: View {
         }
         .task {
             await checkAuthenticationState()
-        }
-        .onChange(of: modelContext) { _, _ in
-            Task {
-                await checkAuthenticationState()
-            }
+            setupAuthStateObserver()
         }
     }
     
@@ -83,8 +81,39 @@ struct ContentView: View {
             ProfileView(viewModel: container.makeProfileViewModel(modelContext: modelContext))
                 .tabItem {
                     Label("Profile", systemImage: "person.circle.fill")
+                }
         }
     }
+    
+    private func setupAuthStateObserver() {
+        let authRepository = container.makeAuthRepository(modelContext: modelContext)
+        
+        authRepository.authState
+            .receive(on: DispatchQueue.main)
+            .sink { state in
+                switch state {
+                case .authenticated(let user):
+                    print("📱 ContentView: AuthState changed to .authenticated(\(user.displayNameOrFallback))")
+                    authState = .authenticated(user)
+                case .guest(let user):
+                    print("📱 ContentView: AuthState changed to .guest(\(user.displayNameOrFallback))")
+                    authState = .authenticated(user)
+                case .unauthenticated:
+                    print("📱 ContentView: AuthState changed to .unauthenticated")
+                    Task {
+                        await createGuestUser()
+                    }
+                case .error(let error):
+                    print("📱 ContentView: AuthState changed to .error(\(error))")
+                    Task {
+                        await createGuestUser()
+                    }
+                case .authenticating:
+                    print("📱 ContentView: AuthState changed to .authenticating")
+                    authState = .checking
+                }
+            }
+            .store(in: &cancellables)
     }
     
     private func checkAuthenticationState() async {
@@ -97,7 +126,7 @@ struct ContentView: View {
             
             if isFirebaseAuthenticated {
                 // User is authenticated in Firebase, check for local user
-                if let user = try await userRepository.getCurrentUser() {
+                if let user = await userRepository.getCurrentUser() {
                     await MainActor.run {
                         authState = .authenticated(user)
                     }
@@ -108,7 +137,7 @@ struct ContentView: View {
             } else {
                 // Not authenticated in Firebase
                 // Check if there's any local user (including guest)
-                if let user = try await userRepository.getCurrentUser() {
+                if let user = await userRepository.getCurrentUser() {
                     if user.isGuest {
                         await MainActor.run {
                             authState = .authenticated(user)
@@ -169,4 +198,4 @@ enum AuthenticationState {
     ContentView()
         .environment(\.dependencyContainer, container)
         .modelContainer(modelContainer)
-} 
+}

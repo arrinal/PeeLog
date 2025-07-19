@@ -19,6 +19,9 @@ final class UserRepositoryImpl: UserRepository {
     private let syncStatusSubject = CurrentValueSubject<SyncStatus, Never>(.idle)
     private let isLoadingSubject = CurrentValueSubject<Bool, Never>(false)
     
+    // Flag to force guest user priority during sign-out transitions
+    private var prioritizeGuest = false
+    
     init(modelContext: ModelContext) {
         self.modelContext = modelContext
     }
@@ -40,17 +43,34 @@ final class UserRepositoryImpl: UserRepository {
     // MARK: - Local User Management
     
     func getCurrentUser() async -> User? {
-        // Get the currently active user (authenticated or guest)
+        // During sign-out transitions, prioritize guest users to prevent 
+        // returning stale authenticated users
+        if prioritizeGuest {
+            print("🔄 UserRepository: prioritizeGuest=true, looking for guest user")
+            if let guestUser = await getGuestUser() {
+                print("✅ UserRepository: Found guest user during prioritize mode: \(guestUser.displayNameOrFallback)")
+                currentUserSubject.send(guestUser)
+                return guestUser
+            }
+            // No guest user found, reset flag and continue normal logic
+            print("⚠️ UserRepository: No guest user found, resetting prioritizeGuest flag")
+            prioritizeGuest = false
+        }
+        
+        // Normal priority: authenticated users first, then guest users
         if let authenticatedUser = await getAuthenticatedUser() {
+            print("🔐 UserRepository: Found authenticated user: \(authenticatedUser.displayNameOrFallback)")
             currentUserSubject.send(authenticatedUser)
             return authenticatedUser
         }
         
         if let guestUser = await getGuestUser() {
+            print("👤 UserRepository: Found guest user: \(guestUser.displayNameOrFallback)")
             currentUserSubject.send(guestUser)
             return guestUser
         }
         
+        print("❌ UserRepository: No user found")
         return nil
     }
     
@@ -108,6 +128,80 @@ final class UserRepositoryImpl: UserRepository {
             }
         } catch {
             throw UserRepositoryError.saveFailed(error.localizedDescription)
+        }
+    }
+    
+    func clearAuthenticatedUsers() async throws {
+        print("🧹 UserRepository: Starting clearAuthenticatedUsers")
+        isLoadingSubject.send(true)
+        defer { isLoadingSubject.send(false) }
+        
+        do {
+            // Reset current user immediately if it was an authenticated user
+            if let currentUser = currentUserSubject.value, !currentUser.isGuest {
+                print("🧹 UserRepository: Clearing current authenticated user: \(currentUser.displayNameOrFallback)")
+                currentUserSubject.send(nil)
+            }
+            
+            // Set flag to prioritize guest users during the transition period
+            prioritizeGuest = true
+            print("🧹 UserRepository: Set prioritizeGuest = true")
+            
+            // Get all authenticated users (non-guest) in a single transaction
+            let descriptor = FetchDescriptor<User>(
+                predicate: #Predicate { $0.isGuest == false }
+            )
+            
+            // Perform deletion in a transaction-like manner
+            let authenticatedUsers = try modelContext.fetch(descriptor)
+            
+            // If no authenticated users, we're done
+            guard !authenticatedUsers.isEmpty else {
+                print("🧹 UserRepository: No authenticated users to clear")
+                return
+            }
+            
+            print("🧹 UserRepository: Found \(authenticatedUsers.count) authenticated users to delete")
+            
+            // Delete all authenticated users in one batch
+            for user in authenticatedUsers {
+                print("🧹 UserRepository: Deleting user: \(user.displayNameOrFallback)")
+                modelContext.delete(user)
+            }
+            
+            // Force save with error handling
+            do {
+                try modelContext.save()
+                print("🧹 UserRepository: Successfully saved deletion changes")
+            } catch {
+                // If save fails, rollback by not completing the operation
+                throw UserRepositoryError.saveFailed("Failed to save changes while clearing authenticated users: \(error.localizedDescription)")
+            }
+            
+            // Verification step - ensure clearing was successful
+            let verificationDescriptor = FetchDescriptor<User>(
+                predicate: #Predicate { $0.isGuest == false }
+            )
+            let remainingUsers = try modelContext.fetch(verificationDescriptor)
+            
+            if !remainingUsers.isEmpty {
+                print("❌ UserRepository: Failed to clear all users - \(remainingUsers.count) remain")
+                // This should not happen, but if it does, we have a serious consistency issue
+                throw UserRepositoryError.saveFailed("Failed to clear authenticated users completely. \(remainingUsers.count) users remain.")
+            } else {
+                print("✅ UserRepository: Successfully cleared all authenticated users")
+            }
+            
+        } catch {
+            // Reset flag on error
+            prioritizeGuest = false
+            print("❌ UserRepository: Error in clearAuthenticatedUsers, reset prioritizeGuest flag")
+            // Ensure we re-throw with proper error context
+            if error is UserRepositoryError {
+                throw error
+            } else {
+                throw UserRepositoryError.saveFailed("Failed to clear authenticated users: \(error.localizedDescription)")
+            }
         }
     }
     
@@ -216,11 +310,16 @@ final class UserRepositoryImpl: UserRepository {
     func createGuestUser() async throws -> User {
         // Check if guest user already exists
         if let existingGuest = await getGuestUser() {
+            // Reset the prioritize flag since we found an existing guest
+            prioritizeGuest = false
             return existingGuest
         }
         
         let guestUser = User.createGuest()
         try await saveUser(guestUser)
+        
+        // Reset the prioritize flag after creating new guest user
+        prioritizeGuest = false
         return guestUser
     }
     

@@ -75,6 +75,7 @@ protocol UserRepository: AnyObject {
     func updateUser(_ user: User) async throws
     func deleteUser(_ user: User) async throws
     func clearUserData() async throws
+    func clearAuthenticatedUsers() async throws
     
     // User preferences management
     func updateUserPreferences(_ preferences: UserPreferences) async throws
