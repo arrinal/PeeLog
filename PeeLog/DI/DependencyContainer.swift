@@ -20,10 +20,14 @@ class DependencyContainer: ObservableObject {
     // MARK: - Firebase Services
     private let firebaseAuthService: FirebaseAuthService
     
-    // MARK: - Repository Cache
-    private var peeEventRepository: PeeEventRepository?
-    private var authRepository: AuthRepository?
-    private var userRepository: UserRepository?
+    // MARK: - Repository Cache - keyed by ModelContext
+    private var peeEventRepositories: [ObjectIdentifier: PeeEventRepository] = [:]
+    private var authRepositories: [ObjectIdentifier: AuthRepository] = [:]
+    private var userRepositories: [ObjectIdentifier: UserRepository] = [:]
+    
+    // MARK: - Shared Repository Instance (for debugging sign-out issue)
+    private var sharedUserRepository: UserRepository?
+    private var sharedAuthRepository: AuthRepository?
     
     init() {
         // Initialize core services
@@ -37,30 +41,61 @@ class DependencyContainer: ObservableObject {
     
     // MARK: - Repository Factory Methods
     private func getPeeEventRepository(modelContext: ModelContext) -> PeeEventRepository {
-        if let repository = peeEventRepository {
+        let contextId = ObjectIdentifier(modelContext)
+        if let repository = peeEventRepositories[contextId] {
             return repository
         }
         let repository = PeeEventRepositoryImpl(modelContext: modelContext)
-        self.peeEventRepository = repository
+        peeEventRepositories[contextId] = repository
         return repository
     }
     
     private func getAuthRepository(modelContext: ModelContext) -> AuthRepository {
-        if let repository = authRepository {
+        // TEMPORARY FIX: Use shared repository to ensure all views see the same state
+        if let sharedRepository = sharedAuthRepository {
+            print("🏭 DependencyContainer: Returning existing shared AuthRepository (ModelContext: \(ObjectIdentifier(modelContext)))")
+            return sharedRepository
+        }
+        
+        // Create the first repository and share it across all contexts
+        print("🏭 DependencyContainer: Creating NEW shared AuthRepository (ModelContext: \(ObjectIdentifier(modelContext)))")
+        let repository = AuthRepositoryImpl(firebaseAuthService: firebaseAuthService, modelContext: modelContext)
+        sharedAuthRepository = repository
+        return repository
+        
+        /* ORIGINAL CODE (commented out for debugging):
+        let contextId = ObjectIdentifier(modelContext)
+        if let repository = authRepositories[contextId] {
             return repository
         }
         let repository = AuthRepositoryImpl(firebaseAuthService: firebaseAuthService, modelContext: modelContext)
-        self.authRepository = repository
+        authRepositories[contextId] = repository
         return repository
+        */
     }
     
     private func getUserRepository(modelContext: ModelContext) -> UserRepository {
-        if let repository = userRepository {
+        // TEMPORARY FIX: Use shared repository to ensure all views see the same state
+        if let sharedRepository = sharedUserRepository {
+            print("🏭 DependencyContainer: Returning existing shared UserRepository (ModelContext: \(ObjectIdentifier(modelContext)))")
+            return sharedRepository
+        }
+        
+        // Create the first repository and share it across all contexts
+        print("🏭 DependencyContainer: Creating NEW shared UserRepository (ModelContext: \(ObjectIdentifier(modelContext)))")
+        let repository = UserRepositoryImpl(modelContext: modelContext)
+        sharedUserRepository = repository
+        return repository
+        
+        /* ORIGINAL CODE (commented out for debugging):
+        let contextId = ObjectIdentifier(modelContext)
+        if let repository = userRepositories[contextId] {
             return repository
         }
         let repository = UserRepositoryImpl(modelContext: modelContext)
-        self.userRepository = repository
+        userRepositories[contextId] = repository
         return repository
+        */
     }
     
     // MARK: - Location Repository Access

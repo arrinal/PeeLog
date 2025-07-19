@@ -45,6 +45,9 @@ final class ProfileViewModel: ObservableObject {
     @Published var exportedData: Data?
     @Published var isExporting = false
     
+    // MARK: - Internal State
+    private var isSigningOut = false
+    
     private var cancellables = Set<AnyCancellable>()
     
     init(
@@ -78,8 +81,31 @@ final class ProfileViewModel: ObservableObject {
         userRepository.currentUser
             .receive(on: DispatchQueue.main)
             .sink { [weak self] user in
-                self?.currentUser = user
-                self?.updatePreferencesFromUser()
+                guard let self = self else { return }
+                
+                // Don't process repository updates during sign-out to prevent race conditions
+                guard !self.isSigningOut else { return }
+                
+                // During normal operation, we want to be careful about updates
+                // to prevent race conditions where old authenticated users reappear
+                if let currentUser = self.currentUser {
+                    // We have a current user - only update if:
+                    // 1. The new user is different (by ID)
+                    // 2. OR the new user is a guest and current user is authenticated (sign-out scenario)
+                    // 3. OR the new user is authenticated and current user is guest (sign-in scenario)
+                    let shouldUpdate = (currentUser.id != user?.id) ||
+                                     (user?.isGuest == true && !currentUser.isGuest) ||
+                                     (user?.isGuest == false && currentUser.isGuest)
+                    
+                    if shouldUpdate {
+                        self.currentUser = user
+                        self.updatePreferencesFromUser()
+                    }
+                } else {
+                    // No current user - accept any user from repository
+                    self.currentUser = user
+                    self.updatePreferencesFromUser()
+                }
             }
             .store(in: &cancellables)
         
@@ -91,11 +117,15 @@ final class ProfileViewModel: ObservableObject {
             }
             .store(in: &cancellables)
         
-        // Observe repository loading state
+        // Observe repository loading state - but don't override manual loading states
         userRepository.isLoading
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] isLoading in
-                self?.isLoading = isLoading
+            .sink { [weak self] repositoryLoading in
+                guard let self = self else { return }
+                // Only update if we're not already in a loading state
+                if !self.isLoading {
+                    self.isLoading = repositoryLoading
+                }
             }
             .store(in: &cancellables)
     }
@@ -162,14 +192,55 @@ final class ProfileViewModel: ObservableObject {
     // MARK: - User Profile Loading
     
     func loadUserProfile() async {
-        isLoading = true
-        clearErrors()
+        // Don't override repository state during sign-out
+        guard !isSigningOut else { 
+            print("🔄 ProfileViewModel: loadUserProfile skipped - isSigningOut=true")
+            return 
+        }
+        
+        print("🔄 ProfileViewModel: Starting loadUserProfile")
+        await MainActor.run {
+            isLoading = true
+            clearErrors()
+        }
         
         let user = await userRepository.getCurrentUser()
-        currentUser = user
-        updatePreferencesFromUser()
         
-        isLoading = false
+        await MainActor.run {
+            // If no user found, create a guest user
+            if user == nil {
+                print("🔄 ProfileViewModel: No user found, creating guest user")
+                Task {
+                    do {
+                        let guestUser = try await userRepository.createGuestUser()
+                        await MainActor.run {
+                            // Only update if we're not signing out
+                            if !isSigningOut {
+                                print("🔄 ProfileViewModel: Setting guest user: \(guestUser.displayNameOrFallback)")
+                                currentUser = guestUser
+                                updatePreferencesFromUser()
+                            }
+                            isLoading = false
+                        }
+                    } catch {
+                        await MainActor.run {
+                            handleError(error)
+                            isLoading = false
+                        }
+                    }
+                }
+            } else {
+                // Only update current user if not signing out and it's actually different
+                if !isSigningOut && currentUser?.id != user?.id {
+                    print("🔄 ProfileViewModel: Setting user: \(user?.displayNameOrFallback ?? "nil") (was: \(currentUser?.displayNameOrFallback ?? "nil"))")
+                    currentUser = user
+                    updatePreferencesFromUser()
+                } else {
+                    print("🔄 ProfileViewModel: Skipping user update - isSigningOut=\(isSigningOut), same user=\(currentUser?.id == user?.id)")
+                }
+                isLoading = false
+            }
+        }
     }
     
     // MARK: - Preferences Management (New Methods for ProfileView)
@@ -310,22 +381,61 @@ final class ProfileViewModel: ObservableObject {
     
     func signOut() async {
         showSignOutConfirmation = false
-        isLoading = true
         
-        do {
-            try await authenticateUserUseCase.signOut()
-            
-            // Create a guest user immediately after signing out
-            // to avoid showing confusing "Not signed in" state
-            let guestUser = User.createGuest()
-            try await userRepository.saveUser(guestUser)
-            currentUser = guestUser
-            updatePreferencesFromUser()
-        } catch {
-            handleError(error)
+        await MainActor.run {
+            isSigningOut = true
+            isLoading = true
+            currentUser = nil
         }
         
-        isLoading = false
+        do {
+            // Sign out from Firebase first
+            try await authenticateUserUseCase.signOut()
+            
+            // Clear all authenticated users from local database with retry logic
+            var attempts = 0
+            let maxAttempts = 3
+            
+            while attempts < maxAttempts {
+                do {
+                    try await userRepository.clearAuthenticatedUsers()
+                    break // Success, exit the retry loop
+                } catch {
+                    attempts += 1
+                    if attempts == maxAttempts {
+                        throw error // Rethrow if all attempts failed
+                    }
+                    // Wait a bit before retrying
+                    try await Task.sleep(nanoseconds: 50_000_000) // 0.05 seconds
+                }
+            }
+            
+            // Small delay to ensure clearing is complete
+            try await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+            
+            // Create a fresh guest user
+            let guestUser = try await userRepository.createGuestUser()
+            await MainActor.run {
+                currentUser = guestUser
+                updatePreferencesFromUser()
+            }
+        } catch {
+            // If sign out fails, still try to create a guest user
+            do {
+                let guestUser = try await userRepository.createGuestUser()
+                await MainActor.run {
+                    currentUser = guestUser
+                    updatePreferencesFromUser()
+                }
+            } catch {
+                handleError(error)
+            }
+        }
+        
+        await MainActor.run {
+            isSigningOut = false
+            isLoading = false
+        }
     }
     
     func deleteAccount() async {

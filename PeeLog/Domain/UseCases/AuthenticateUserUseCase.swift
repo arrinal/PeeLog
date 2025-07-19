@@ -203,14 +203,14 @@ final class AuthenticateUserUseCase: AuthenticateUserUseCaseProtocol {
     
     func signOut() async throws {
         do {
-            // Sign out from auth repository
+            // Clear all authenticated users from local storage FIRST
+            try await userRepository.clearAuthenticatedUsers()
+            
+            // Sign out from auth repository (this will trigger handleFirebaseSignOut)
             try await authRepository.signOut()
             
-            // Update auth state to unauthenticated
-            authRepository.updateAuthState(.unauthenticated)
-            
-            // Clear local user data (optional - depends on requirements)
-            // For offline-first approach, we might want to keep local data
+            // DON'T override the auth state here - let handleFirebaseSignOut determine
+            // the correct state based on whether guest users exist
             
         } catch {
             let context = ErrorContextHelper.createSignOutContext()
