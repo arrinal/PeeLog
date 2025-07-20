@@ -197,7 +197,7 @@ final class FirebaseAuthService: ObservableObject {
         
         // Create Firebase credential
         let firebaseCredential = OAuthProvider.credential(
-            withProviderID: "apple.com",
+            providerID: .apple,
             idToken: idTokenString,
             rawNonce: nonce
         )

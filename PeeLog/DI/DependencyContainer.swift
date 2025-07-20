@@ -25,7 +25,7 @@ class DependencyContainer: ObservableObject {
     private var authRepositories: [ObjectIdentifier: AuthRepository] = [:]
     private var userRepositories: [ObjectIdentifier: UserRepository] = [:]
     
-    // MARK: - Shared Repository Instance (for debugging sign-out issue)
+    // MARK: - Shared Repository Instances
     private var sharedUserRepository: UserRepository?
     private var sharedAuthRepository: AuthRepository?
     
@@ -51,51 +51,27 @@ class DependencyContainer: ObservableObject {
     }
     
     private func getAuthRepository(modelContext: ModelContext) -> AuthRepository {
-        // TEMPORARY FIX: Use shared repository to ensure all views see the same state
+        // Use shared repository to ensure all views see the same state
         if let sharedRepository = sharedAuthRepository {
-            print("🏭 DependencyContainer: Returning existing shared AuthRepository (ModelContext: \(ObjectIdentifier(modelContext)))")
             return sharedRepository
         }
         
         // Create the first repository and share it across all contexts
-        print("🏭 DependencyContainer: Creating NEW shared AuthRepository (ModelContext: \(ObjectIdentifier(modelContext)))")
         let repository = AuthRepositoryImpl(firebaseAuthService: firebaseAuthService, modelContext: modelContext)
         sharedAuthRepository = repository
         return repository
-        
-        /* ORIGINAL CODE (commented out for debugging):
-        let contextId = ObjectIdentifier(modelContext)
-        if let repository = authRepositories[contextId] {
-            return repository
-        }
-        let repository = AuthRepositoryImpl(firebaseAuthService: firebaseAuthService, modelContext: modelContext)
-        authRepositories[contextId] = repository
-        return repository
-        */
     }
     
     private func getUserRepository(modelContext: ModelContext) -> UserRepository {
-        // TEMPORARY FIX: Use shared repository to ensure all views see the same state
+        // Use shared repository to ensure all views see the same state
         if let sharedRepository = sharedUserRepository {
-            print("🏭 DependencyContainer: Returning existing shared UserRepository (ModelContext: \(ObjectIdentifier(modelContext)))")
             return sharedRepository
         }
         
         // Create the first repository and share it across all contexts
-        print("🏭 DependencyContainer: Creating NEW shared UserRepository (ModelContext: \(ObjectIdentifier(modelContext)))")
         let repository = UserRepositoryImpl(modelContext: modelContext)
         sharedUserRepository = repository
         return repository
-        
-        /* ORIGINAL CODE (commented out for debugging):
-        let contextId = ObjectIdentifier(modelContext)
-        if let repository = userRepositories[contextId] {
-            return repository
-        }
-        let repository = UserRepositoryImpl(modelContext: modelContext)
-        userRepositories[contextId] = repository
-        return repository
-        */
     }
     
     // MARK: - Location Repository Access
