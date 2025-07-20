@@ -93,23 +93,18 @@ struct ContentView: View {
             .sink { state in
                 switch state {
                 case .authenticated(let user):
-                    print("📱 ContentView: AuthState changed to .authenticated(\(user.displayNameOrFallback))")
                     authState = .authenticated(user)
                 case .guest(let user):
-                    print("📱 ContentView: AuthState changed to .guest(\(user.displayNameOrFallback))")
                     authState = .authenticated(user)
                 case .unauthenticated:
-                    print("📱 ContentView: AuthState changed to .unauthenticated")
                     Task {
                         await createGuestUser()
                     }
-                case .error(let error):
-                    print("📱 ContentView: AuthState changed to .error(\(error))")
+                case .error:
                     Task {
                         await createGuestUser()
                     }
                 case .authenticating:
-                    print("📱 ContentView: AuthState changed to .authenticating")
                     authState = .checking
                 }
             }

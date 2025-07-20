@@ -57,7 +57,6 @@ final class AuthRepositoryImpl: AuthRepository {
         // Observe Firebase auth state changes
         firebaseAuthService.$isSignedIn
             .sink { [weak self] isSignedIn in
-                print("🔥 AuthRepository: Firebase auth state changed - isSignedIn: \(isSignedIn)")
                 Task { @MainActor in
                     guard let self = self else { return }
                     
@@ -65,8 +64,6 @@ final class AuthRepositoryImpl: AuthRepository {
                         // Prevent handleFirebaseSignIn during sign-out to avoid race condition
                         if !self.isSigningOut {
                             await self.handleFirebaseSignIn()
-                        } else {
-                            print("🔥 AuthRepository: Ignoring Firebase sign-in during sign-out process")
                         }
                     } else {
                         await self.handleFirebaseSignOut()
@@ -101,11 +98,8 @@ final class AuthRepositoryImpl: AuthRepository {
     }
     
     private func handleFirebaseSignIn() async {
-        print("🔥 AuthRepository: handleFirebaseSignIn entry - isSigningOut=\(isSigningOut)")
-        
         // Prevent sign-in processing during sign-out to avoid race condition
         if isSigningOut {
-            print("🔥 AuthRepository: handleFirebaseSignIn blocked - currently signing out")
             return
         }
         
@@ -113,17 +107,13 @@ final class AuthRepositoryImpl: AuthRepository {
         if let completionTime = signOutCompletionTime {
             let timeSinceSignOut = Date().timeIntervalSince(completionTime)
             if timeSinceSignOut < 1.0 { // 1 second grace period
-                print("🔥 AuthRepository: handleFirebaseSignIn blocked - \(String(format: "%.2f", timeSinceSignOut))s since sign-out")
                 return
             }
         }
         
         guard let firebaseUser = firebaseAuthService.getCurrentUser() else { 
-            print("🔥 AuthRepository: handleFirebaseSignIn called but no Firebase user found")
             return 
         }
-        
-        print("🔥 AuthRepository: handleFirebaseSignIn called for user: \(firebaseUser.email ?? "no-email")")
         
         do {
             // Reload user to get fresh data including display name
@@ -136,7 +126,6 @@ final class AuthRepositoryImpl: AuthRepository {
             if let existingUser = await getUserByEmail(updatedFirebaseUser.email) {
                 // Double-check that we're not signing out before authenticating with cached user
                 if isSigningOut {
-                    print("🔥 AuthRepository: Found cached user but ignoring due to sign-out in progress")
                     return
                 }
                 
@@ -144,7 +133,6 @@ final class AuthRepositoryImpl: AuthRepository {
                 if let completionTime = signOutCompletionTime {
                     let timeSinceSignOut = Date().timeIntervalSince(completionTime)
                     if timeSinceSignOut < 1.0 {
-                        print("🔥 AuthRepository: Found cached user but ignoring - \(String(format: "%.2f", timeSinceSignOut))s since sign-out")
                         return
                     }
                 }
@@ -158,7 +146,6 @@ final class AuthRepositoryImpl: AuthRepository {
             } else {
                 // Don't create new users during sign-out
                 if isSigningOut {
-                    print("🔥 AuthRepository: Skipping new user creation during sign-out")
                     return
                 }
                 
@@ -166,7 +153,6 @@ final class AuthRepositoryImpl: AuthRepository {
                 if let completionTime = signOutCompletionTime {
                     let timeSinceSignOut = Date().timeIntervalSince(completionTime)
                     if timeSinceSignOut < 1.0 {
-                        print("🔥 AuthRepository: Skipping new user creation - \(String(format: "%.2f", timeSinceSignOut))s since sign-out")
                         return
                     }
                 }
@@ -199,16 +185,13 @@ final class AuthRepositoryImpl: AuthRepository {
     }
     
     private func handleFirebaseSignOut() async {
-        print("🔥 AuthRepository: handleFirebaseSignOut called")
         // Clear current user first
         currentUserSubject.send(nil)
         
         // Check for local guest user
         if let guestUser = await getLocalGuestUser() {
-            print("🔥 AuthRepository: Found guest user, setting state to .guest(\(guestUser.displayNameOrFallback))")
             updateAuthState(.guest(guestUser))
         } else {
-            print("🔥 AuthRepository: No guest user found, setting state to .unauthenticated")
             updateAuthState(.unauthenticated)
         }
     }
@@ -368,7 +351,6 @@ final class AuthRepositoryImpl: AuthRepository {
         do {
             // Set flag to prevent Firebase observer interference
             isSigningOut = true
-            print("🔥 AuthRepository: Starting sign out - isSigningOut=true")
             
             // Clear the current user subject immediately
             currentUserSubject.send(nil)
@@ -385,7 +367,6 @@ final class AuthRepositoryImpl: AuthRepository {
                 await MainActor.run {
                     self.isSigningOut = false
                     self.signOutCompletionTime = Date()
-                    print("🔥 AuthRepository: Sign out complete - isSigningOut=false, completion time set")
                 }
             }
             
@@ -523,19 +504,6 @@ final class AuthRepositoryImpl: AuthRepository {
     }
     
     func updateAuthState(_ state: AuthState) {
-        switch state {
-        case .authenticated(let user):
-            print("🔥 AuthRepository: updateAuthState(.authenticated(\(user.displayNameOrFallback))) - STACK TRACE:")
-            print("🔥 \(Thread.callStackSymbols.prefix(5).joined(separator: "\n🔥 "))")
-        case .guest(let user):
-            print("🔥 AuthRepository: updateAuthState(.guest(\(user.displayNameOrFallback)))")
-        case .unauthenticated:
-            print("🔥 AuthRepository: updateAuthState(.unauthenticated)")
-        case .authenticating:
-            print("🔥 AuthRepository: updateAuthState(.authenticating)")
-        case .error(let error):
-            print("🔥 AuthRepository: updateAuthState(.error(\(error)))")
-        }
         authStateSubject.send(state)
     }
     

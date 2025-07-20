@@ -194,11 +194,9 @@ final class ProfileViewModel: ObservableObject {
     func loadUserProfile() async {
         // Don't override repository state during sign-out
         guard !isSigningOut else { 
-            print("🔄 ProfileViewModel: loadUserProfile skipped - isSigningOut=true")
             return 
         }
         
-        print("🔄 ProfileViewModel: Starting loadUserProfile")
         await MainActor.run {
             isLoading = true
             clearErrors()
@@ -209,14 +207,12 @@ final class ProfileViewModel: ObservableObject {
         await MainActor.run {
             // If no user found, create a guest user
             if user == nil {
-                print("🔄 ProfileViewModel: No user found, creating guest user")
                 Task {
                     do {
                         let guestUser = try await userRepository.createGuestUser()
                         await MainActor.run {
                             // Only update if we're not signing out
                             if !isSigningOut {
-                                print("🔄 ProfileViewModel: Setting guest user: \(guestUser.displayNameOrFallback)")
                                 currentUser = guestUser
                                 updatePreferencesFromUser()
                             }
@@ -232,11 +228,8 @@ final class ProfileViewModel: ObservableObject {
             } else {
                 // Only update current user if not signing out and it's actually different
                 if !isSigningOut && currentUser?.id != user?.id {
-                    print("🔄 ProfileViewModel: Setting user: \(user?.displayNameOrFallback ?? "nil") (was: \(currentUser?.displayNameOrFallback ?? "nil"))")
                     currentUser = user
                     updatePreferencesFromUser()
-                } else {
-                    print("🔄 ProfileViewModel: Skipping user update - isSigningOut=\(isSigningOut), same user=\(currentUser?.id == user?.id)")
                 }
                 isLoading = false
             }
