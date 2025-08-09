@@ -15,6 +15,7 @@ final class AuthenticationViewModel: ObservableObject {
     private let authenticateUserUseCase: AuthenticateUserUseCaseProtocol
     private let createUserProfileUseCase: CreateUserProfileUseCaseProtocol
     private let migrateGuestDataUseCase: MigrateGuestDataUseCaseProtocol
+    private var skipMigrationUseCase: SkipMigrationUseCaseProtocol?
     private let errorHandlingUseCase: ErrorHandlingUseCase
     
     // MARK: - Published Properties
@@ -49,6 +50,8 @@ final class AuthenticationViewModel: ObservableObject {
     // MARK: - Guest Migration
     @Published var showGuestMigrationAlert = false
     @Published var guestUserToMigrate: User?
+    @Published var showMigrationDialog = false
+    @Published var isMigrating = false
     
     // MARK: - Validation Properties
     @Published var emailError: String?
@@ -69,6 +72,10 @@ final class AuthenticationViewModel: ObservableObject {
         self.errorHandlingUseCase = errorHandlingUseCase
         
         setupValidation()
+    }
+    
+    func setSkipMigrationUseCase(_ useCase: SkipMigrationUseCaseProtocol) {
+        self.skipMigrationUseCase = useCase
     }
     
     // MARK: - Validation Setup
@@ -131,7 +138,7 @@ final class AuthenticationViewModel: ObservableObject {
             // Check if there's a guest user to migrate
             if let guestUser = await getCurrentGuestUser() {
                 guestUserToMigrate = guestUser
-                showGuestMigrationAlert = true
+                showMigrationDialog = true
                 isLoading = false
                 return
             }
@@ -181,7 +188,7 @@ final class AuthenticationViewModel: ObservableObject {
             // Check if there's a guest user to migrate
             if let guestUser = await getCurrentGuestUser() {
                 guestUserToMigrate = guestUser
-                showGuestMigrationAlert = true
+                showMigrationDialog = true
                 isLoading = false
                 return
             }
@@ -332,6 +339,7 @@ final class AuthenticationViewModel: ObservableObject {
         
         isLoading = true
         showGuestMigrationAlert = false
+        showMigrationDialog = false
         
         do {
             let authResult: AuthResult

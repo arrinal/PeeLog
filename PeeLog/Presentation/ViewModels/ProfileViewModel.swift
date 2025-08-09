@@ -16,6 +16,8 @@ final class ProfileViewModel: ObservableObject {
     private let createUserProfileUseCase: CreateUserProfileUseCaseProtocol
     private let updateUserPreferencesUseCase: UpdateUserPreferencesUseCaseProtocol
     private let userRepository: UserRepository
+    private let peeEventRepository: PeeEventRepository
+    private let syncCoordinator: SyncCoordinator
     private let errorHandlingUseCase: ErrorHandlingUseCase
     
     // MARK: - Published Properties
@@ -55,13 +57,17 @@ final class ProfileViewModel: ObservableObject {
         createUserProfileUseCase: CreateUserProfileUseCaseProtocol,
         updateUserPreferencesUseCase: UpdateUserPreferencesUseCaseProtocol,
         userRepository: UserRepository,
-        errorHandlingUseCase: ErrorHandlingUseCase
+        errorHandlingUseCase: ErrorHandlingUseCase,
+        peeEventRepository: PeeEventRepository,
+        syncCoordinator: SyncCoordinator
     ) {
         self.authenticateUserUseCase = authenticateUserUseCase
         self.createUserProfileUseCase = createUserProfileUseCase
         self.updateUserPreferencesUseCase = updateUserPreferencesUseCase
         self.userRepository = userRepository
         self.errorHandlingUseCase = errorHandlingUseCase
+        self.peeEventRepository = peeEventRepository
+        self.syncCoordinator = syncCoordinator
         
         setupObservers()
         loadUserData()
@@ -382,7 +388,10 @@ final class ProfileViewModel: ObservableObject {
         }
         
         do {
-            // Sign out from Firebase first
+            // Sync all data (events + profile) before sign out
+            try? await syncCoordinator.syncBeforeLogout()
+            
+            // Sign out from Firebase
             try await authenticateUserUseCase.signOut()
             
             // Clear all authenticated users from local database with retry logic
@@ -406,6 +415,9 @@ final class ProfileViewModel: ObservableObject {
             // Small delay to ensure clearing is complete
             try await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
             
+            // Clear all local events as part of logout transition
+            do { try peeEventRepository.clearAllEvents() } catch { /* no-op */ }
+
             // Create a fresh guest user
             let guestUser = try await userRepository.createGuestUser()
             await MainActor.run {
