@@ -53,6 +53,8 @@ struct ProfileView: View {
                     }
                 }
             )
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
         }
         .alert("Error", isPresented: $viewModel.showError) {
             Button("OK") {

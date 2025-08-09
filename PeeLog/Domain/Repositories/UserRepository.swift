@@ -34,7 +34,7 @@ enum UserRepositoryError: Error, LocalizedError, Equatable {
         case .networkError(let message):
             return "Network error: \(message)"
         case .unknown(let message):
-            return "Unknown error: \(message)"
+            return "\(message)"
         }
     }
 }
