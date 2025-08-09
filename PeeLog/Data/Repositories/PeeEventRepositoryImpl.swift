@@ -39,4 +39,16 @@ class PeeEventRepositoryImpl: PeeEventRepository {
         modelContext.delete(event)
         try modelContext.save()
     }
+
+    func clearAllEvents() throws {
+        let descriptor = FetchDescriptor<PeeEvent>()
+        let all = try modelContext.fetch(descriptor)
+        for e in all { modelContext.delete(e) }
+        try modelContext.save()
+    }
+
+    func addEvents(_ events: [PeeEvent]) throws {
+        for e in events { modelContext.insert(e) }
+        try modelContext.save()
+    }
 } 

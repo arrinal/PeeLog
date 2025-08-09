@@ -8,6 +8,7 @@
 import Foundation
 import SwiftData
 import Combine
+@preconcurrency import FirebaseAuth
 
 @MainActor
 final class UserRepositoryImpl: UserRepository {
@@ -260,9 +261,12 @@ final class UserRepositoryImpl: UserRepository {
         syncStatusSubject.send(.syncing)
         
         do {
-            // TODO: Implement Firebase Firestore sync
-            // This will upload user data to Firebase
-            try await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+            // Upload user profile and preferences to Firestore
+            guard let firebaseUID = Auth.auth().currentUser?.uid else {
+                throw UserRepositoryError.syncFailed("No authenticated Firebase user")
+            }
+            let firestore = FirestoreService()
+            try await firestore.saveUser(uid: firebaseUID, localUser: user)
             
             syncStatusSubject.send(.synced)
         } catch {
@@ -275,12 +279,31 @@ final class UserRepositoryImpl: UserRepository {
         syncStatusSubject.send(.syncing)
         
         do {
-            // TODO: Implement Firebase Firestore fetch
-            // This will download user data from Firebase
-            try await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+            guard let firebaseUID = Auth.auth().currentUser?.uid else {
+                throw UserRepositoryError.syncFailed("No authenticated Firebase user")
+            }
+            let firestore = FirestoreService()
+            if let remote = try await firestore.fetchUser(uid: firebaseUID) {
+                // Merge remote data into local user
+                let user: User
+                if let existing = await getAuthenticatedUser() {
+                    user = existing
+                } else {
+                    user = User(
+                        email: remote.email,
+                        displayName: remote.displayName,
+                        authProvider: AuthProvider(rawValue: remote.authProvider) ?? .email
+                    )
+                }
+                user.updatePreferences(remote.preferences)
+                user.updatedAt = remote.updatedAt
+                try await updateUser(user)
+                syncStatusSubject.send(.synced)
+                return user
+            }
             
             syncStatusSubject.send(.synced)
-            return nil // Will return actual user when implemented
+            return nil
         } catch {
             syncStatusSubject.send(.error(error.localizedDescription))
             throw UserRepositoryError.syncFailed(error.localizedDescription)

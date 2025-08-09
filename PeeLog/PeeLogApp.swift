@@ -8,11 +8,18 @@
 import SwiftUI
 import SwiftData
 import FirebaseCore
+import FirebaseFirestore
 
 class AppDelegate: NSObject, UIApplicationDelegate {
   func application(_ application: UIApplication,
                    didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
     FirebaseApp.configure()
+    // Configure Firestore settings (offline persistence, cache size)
+    let settings = FirestoreSettings()
+    settings.isPersistenceEnabled = true
+    // Optional: unlimited cache to favor offline usage
+    settings.cacheSizeBytes = FirestoreCacheSizeUnlimited
+    Firestore.firestore().settings = settings
 
     return true
   }

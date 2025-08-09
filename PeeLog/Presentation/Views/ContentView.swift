@@ -25,6 +25,11 @@ struct ContentView: View {
                 mainTabView
                     .onAppear {
                         currentUser = user
+                        // Trigger an initial full sync when landing on the main UI after login
+                        Task { @MainActor in
+                            let sync = container.makeSyncCoordinator(modelContext: modelContext)
+                            try? await sync.initialFullSync()
+                        }
                     }
             case .unauthenticated:
                 AuthenticationView.makeWithDependencies(

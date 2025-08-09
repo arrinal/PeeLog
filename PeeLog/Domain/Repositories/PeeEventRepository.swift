@@ -13,4 +13,6 @@ protocol PeeEventRepository {
     func getEventsForToday() -> [PeeEvent]
     func addEvent(_ event: PeeEvent) throws
     func deleteEvent(_ event: PeeEvent) throws
+    func clearAllEvents() throws
+    func addEvents(_ events: [PeeEvent]) throws
 } 

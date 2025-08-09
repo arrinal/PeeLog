@@ -19,6 +19,7 @@ class DependencyContainer: ObservableObject {
     
     // MARK: - Firebase Services
     private let firebaseAuthService: FirebaseAuthService
+    private let firestoreService: FirestoreService
     
     // MARK: - Repository Cache - keyed by ModelContext
     private var peeEventRepositories: [ObjectIdentifier: PeeEventRepository] = [:]
@@ -28,6 +29,8 @@ class DependencyContainer: ObservableObject {
     // MARK: - Shared Repository Instances
     private var sharedUserRepository: UserRepository?
     private var sharedAuthRepository: AuthRepository?
+    private var sharedSyncCoordinator: SyncCoordinator?
+    private var sharedMigrationController: MigrationController?
     
     init() {
         // Initialize core services
@@ -37,6 +40,7 @@ class DependencyContainer: ObservableObject {
         
         // Initialize Firebase services
         self.firebaseAuthService = FirebaseAuthService()
+        self.firestoreService = FirestoreService()
     }
     
     // MARK: - Repository Factory Methods
@@ -97,6 +101,32 @@ class DependencyContainer: ObservableObject {
         return getPeeEventRepository(modelContext: modelContext)
     }
     
+    // MARK: - Cloud Services Accessors
+    func getFirestoreService() -> FirestoreService { firestoreService }
+
+    // MARK: - Coordinators / Controllers
+    func makeSyncCoordinator(modelContext: ModelContext) -> SyncCoordinator {
+        if let shared = sharedSyncCoordinator { return shared }
+        let coordinator = SyncCoordinator(
+            peeEventRepository: getPeeEventRepository(modelContext: modelContext),
+            userRepository: getUserRepository(modelContext: modelContext),
+            firestoreService: firestoreService
+        )
+        sharedSyncCoordinator = coordinator
+        return coordinator
+    }
+    
+    func makeMigrationController(modelContext: ModelContext) -> MigrationController {
+        if let shared = sharedMigrationController { return shared }
+        let controller = MigrationControllerImpl(
+            userRepository: getUserRepository(modelContext: modelContext),
+            peeEventRepository: getPeeEventRepository(modelContext: modelContext),
+            firestoreService: firestoreService
+        )
+        sharedMigrationController = controller
+        return controller
+    }
+    
     // MARK: - View Model Factory Methods
     func makeHomeViewModel(modelContext: ModelContext) -> HomeViewModel {
         let repository = getPeeEventRepository(modelContext: modelContext)
@@ -142,7 +172,7 @@ class DependencyContainer: ObservableObject {
         let userRepository = getUserRepository(modelContext: modelContext)
         let peeEventRepository = getPeeEventRepository(modelContext: modelContext)
         
-        return AuthenticationViewModel(
+        let authVM = AuthenticationViewModel(
             authenticateUserUseCase: AuthenticateUserUseCase(
                 authRepository: authRepository,
                 userRepository: userRepository,
@@ -155,15 +185,22 @@ class DependencyContainer: ObservableObject {
             migrateGuestDataUseCase: MigrateGuestDataUseCase(
                 userRepository: userRepository,
                 peeEventRepository: peeEventRepository,
-                errorHandlingUseCase: errorHandlingUseCase
+                errorHandlingUseCase: errorHandlingUseCase,
+                migrationController: makeMigrationController(modelContext: modelContext)
             ),
             errorHandlingUseCase: errorHandlingUseCase
         )
+        // Optional: inject skip use case wired to controller
+        let skip = SkipMigrationUseCase(migrationController: makeMigrationController(modelContext: modelContext))
+        authVM.setSkipMigrationUseCase(skip)
+        return authVM
     }
     
     func makeProfileViewModel(modelContext: ModelContext) -> ProfileViewModel {
         let authRepository = getAuthRepository(modelContext: modelContext)
         let userRepository = getUserRepository(modelContext: modelContext)
+        let peeEventRepository = getPeeEventRepository(modelContext: modelContext)
+        let syncCoordinator = makeSyncCoordinator(modelContext: modelContext)
         
         return ProfileViewModel(
             authenticateUserUseCase: AuthenticateUserUseCase(
@@ -180,7 +217,9 @@ class DependencyContainer: ObservableObject {
                 errorHandlingUseCase: errorHandlingUseCase
             ),
             userRepository: userRepository,
-            errorHandlingUseCase: errorHandlingUseCase
+            errorHandlingUseCase: errorHandlingUseCase,
+            peeEventRepository: peeEventRepository,
+            syncCoordinator: syncCoordinator
         )
     }
 }

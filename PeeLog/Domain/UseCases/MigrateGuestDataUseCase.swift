@@ -67,17 +67,20 @@ final class MigrateGuestDataUseCase: MigrateGuestDataUseCaseProtocol {
     private let userRepository: UserRepository
     private let peeEventRepository: PeeEventRepository
     private let errorHandlingUseCase: ErrorHandlingUseCase
+    private let migrationController: MigrationController
     
     @Published private(set) var migrationStatus: MigrationStatus = .idle
     
     init(
         userRepository: UserRepository,
         peeEventRepository: PeeEventRepository,
-        errorHandlingUseCase: ErrorHandlingUseCase
+        errorHandlingUseCase: ErrorHandlingUseCase,
+        migrationController: MigrationController
     ) {
         self.userRepository = userRepository
         self.peeEventRepository = peeEventRepository
         self.errorHandlingUseCase = errorHandlingUseCase
+        self.migrationController = migrationController
     }
     
     func migrateGuestData(guestUser: User, to authenticatedUser: User) async throws {
@@ -102,37 +105,9 @@ final class MigrateGuestDataUseCase: MigrateGuestDataUseCaseProtocol {
             let guestEvents = peeEventRepository.getAllEvents()
             let guestEventsForUser = guestEvents // All events have non-nil timestamps
             
+            // Delegate the heavy lifting to MigrationController (cloud + local)
             migrationStatus = .migratingUser
-            
-            // Step 2: Preserve guest user preferences in authenticated user
-            let guestPreferences = guestUser.preferences
-            authenticatedUser.updatePreferences(guestPreferences)
-            
-            // Step 3: Save the authenticated user
-            try await userRepository.saveUser(authenticatedUser)
-            
-            migrationStatus = .transferringEvents
-            
-            // Step 4: Update all guest events to belong to authenticated user
-            for _ in guestEventsForUser {
-                // Note: We'll need to add a user relationship to PeeEvent in the future
-                // For now, events are local to the device, so they remain accessible
-                // This is where we would update event.userId = authenticatedUser.id if we had that field
-            }
-            
-            migrationStatus = .syncingToServer
-            
-            // Step 5: Sync authenticated user and events to server
-            if authenticatedUser.preferences.syncEnabled {
-                try await userRepository.syncUserToServer(authenticatedUser)
-                // TODO: Sync events to server when sync service is implemented
-            }
-            
-            migrationStatus = .cleaningUp
-            
-            // Step 6: Remove guest user data
-            try await userRepository.deleteUser(guestUser)
-            
+            try await migrationController.migrateGuestData(guestUser: guestUser, to: authenticatedUser)
             migrationStatus = .completed
             
         } catch {

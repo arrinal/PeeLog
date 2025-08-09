@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		70A2EA942E472D83002D4947 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 70A2EA932E472D83002D4947 /* FirebaseFirestore */; };
 		70C2FFA32E2CE06200878AED /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = 70C2FFA22E2CE06200878AED /* FirebaseAnalytics */; };
 		70C2FFA52E2CE06200878AED /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 70C2FFA42E2CE06200878AED /* FirebaseAuth */; };
 /* End PBXBuildFile section */
@@ -72,6 +73,7 @@
 			files = (
 				70C2FFA32E2CE06200878AED /* FirebaseAnalytics in Frameworks */,
 				70C2FFA52E2CE06200878AED /* FirebaseAuth in Frameworks */,
+				70A2EA942E472D83002D4947 /* FirebaseFirestore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -142,6 +144,7 @@
 			packageProductDependencies = (
 				70C2FFA22E2CE06200878AED /* FirebaseAnalytics */,
 				70C2FFA42E2CE06200878AED /* FirebaseAuth */,
+				70A2EA932E472D83002D4947 /* FirebaseFirestore */,
 			);
 			productName = PeeLog;
 			productReference = 709FDFAF2DCA6AD900185FE3 /* PeeLog.app */;
@@ -624,6 +627,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		70A2EA932E472D83002D4947 /* FirebaseFirestore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 70C2FFA12E2CE04500878AED /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseFirestore;
+		};
 		70C2FFA22E2CE06200878AED /* FirebaseAnalytics */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 70C2FFA12E2CE04500878AED /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;

@@ -35,7 +35,12 @@ struct AuthenticationView: View {
             migrateGuestDataUseCase: MigrateGuestDataUseCase(
                 userRepository: UserRepositoryImpl(modelContext: ModelContext(try! ModelContainer(for: User.self))),
                 peeEventRepository: PeeEventRepositoryImpl(modelContext: ModelContext(try! ModelContainer(for: PeeEvent.self))),
-                errorHandlingUseCase: ErrorHandlingUseCaseImpl()
+                errorHandlingUseCase: ErrorHandlingUseCaseImpl(),
+                migrationController: MigrationControllerImpl(
+                    userRepository: UserRepositoryImpl(modelContext: ModelContext(try! ModelContainer(for: User.self))),
+                    peeEventRepository: PeeEventRepositoryImpl(modelContext: ModelContext(try! ModelContainer(for: PeeEvent.self))),
+                    firestoreService: FirestoreService()
+                )
             ),
             errorHandlingUseCase: ErrorHandlingUseCaseImpl()
         ))
@@ -119,19 +124,14 @@ struct AuthenticationView: View {
             Text(viewModel.errorMessage)
         }
         .alert("Migrate Guest Data", isPresented: $viewModel.showGuestMigrationAlert) {
-            Button("Migrate") {
-                Task {
-                    await viewModel.proceedWithMigration()
-                }
-            }
-            Button("Skip", role: .cancel) {
-                Task {
-                    await viewModel.skipMigration()
-                }
-            }
-        } message: {
-            Text("You have existing guest data. Would you like to migrate it to your new account?")
-        }
+            Button("Migrate") { Task { await viewModel.proceedWithMigration() } }
+            Button("Skip", role: .destructive) { Task { await viewModel.skipMigration() } }
+        } message: { Text("You have existing guest data. Would you like to migrate it to your new account?") }
+        .confirmationDialog("Guest data detected", isPresented: $viewModel.showMigrationDialog, titleVisibility: .visible) {
+            Button("Migrate Data") { Task { await viewModel.proceedWithMigration() } }
+            Button("Skip Migration", role: .destructive) { Task { await viewModel.skipMigration() } }
+            Button("Cancel", role: .cancel) {}
+        } message: { Text("Migrate your guest data to your account, or start fresh by skipping migration.") }
 
     }
     

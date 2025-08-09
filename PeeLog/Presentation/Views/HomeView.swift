@@ -209,6 +209,12 @@ struct HomeView: View {
         .onAppear {
             viewModel.loadTodaysEvents()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .eventsDidSync)) { _ in
+            // Ensure we hop to the main actor for UI-bound view model
+            Task { @MainActor in
+                viewModel.loadTodaysEvents()
+            }
+        }
     }
     
     // MARK: - Adaptive Colors
