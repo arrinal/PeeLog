@@ -40,7 +40,7 @@ enum AppError: Error, LocalizedError, Equatable {
         case .timeout(let message):
             return "Timeout: \(message)"
         case .unknown(let message):
-            return "Unknown Error: \(message)"
+            return "\(message)"
         case .locationError(let locationError):
             return locationError.errorDescription
         case .saveFailed(let message):

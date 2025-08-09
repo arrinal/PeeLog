@@ -54,7 +54,7 @@ enum AuthError: Error, LocalizedError, Equatable {
         case .tooManyRequests:
             return "Too many requests. Please try again later"
         case .unknown(let message):
-            return "Unknown error: \(message)"
+            return "\(message)"
         }
     }
 }
