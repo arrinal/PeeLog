@@ -15,6 +15,7 @@ struct ContentView: View {
     @State private var authState: AuthenticationState = .checking
     @State private var currentUser: User?
     @State private var cancellables = Set<AnyCancellable>()
+    @State private var lastSyncedUserId: UUID?
     
     var body: some View {
         Group {
@@ -98,6 +99,14 @@ struct ContentView: View {
                 switch state {
                 case .authenticated(let user):
                     authState = .authenticated(user)
+                    // Trigger full sync when transitioning to a non-guest authenticated user
+                    if !user.isGuest && lastSyncedUserId != user.id {
+                        lastSyncedUserId = user.id
+                        Task { @MainActor in
+                            let sync = container.makeSyncCoordinator(modelContext: modelContext)
+                            try? await sync.initialFullSync()
+                        }
+                    }
                 case .guest(let user):
                     authState = .authenticated(user)
                 case .unauthenticated:

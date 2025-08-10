@@ -391,7 +391,6 @@ final class FirebaseAuthService: ObservableObject {
     func getCurrentUser() -> FirebaseAuth.User? {
         let user = Auth.auth().currentUser
         if let user = user {
-            print("🔍 Firebase Auth: Current user - Email: \(user.email ?? "nil"), Display Name: '\(user.displayName ?? "nil")', UID: \(user.uid)")
         }
         return user
     }

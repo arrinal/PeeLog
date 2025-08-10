@@ -153,7 +153,8 @@ final class ProfileViewModel: ObservableObject {
         notificationsEnabled = preferences.notificationsEnabled
         selectedUnits = preferences.units
         selectedTheme = preferences.theme
-        syncEnabled = preferences.syncEnabled
+        // Sync is always on for authenticated users; keep UI field but don't expose toggle
+        syncEnabled = true
     }
     
     // MARK: - Profile Management
