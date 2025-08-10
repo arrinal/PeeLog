@@ -39,6 +39,7 @@ final class MigrationControllerImpl: MigrationController {
         let cloudEvents = try await firestoreService.fetchAllEvents(uid: uid)
         try peeEventRepository.clearAllEvents()
         try peeEventRepository.addEvents(cloudEvents)
+        NotificationCenter.default.post(name: .eventsDidSync, object: nil)
         
         // 4) Remove guest user locally
         try await userRepository.deleteUser(guestUser)
@@ -63,6 +64,7 @@ final class MigrationControllerImpl: MigrationController {
         // 3) Fetch cloud events and store locally
         let cloudEvents = try await firestoreService.fetchAllEvents(uid: uid)
         try peeEventRepository.addEvents(cloudEvents)
+        NotificationCenter.default.post(name: .eventsDidSync, object: nil)
     }
 }
 

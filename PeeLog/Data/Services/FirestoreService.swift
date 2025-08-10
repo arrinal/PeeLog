@@ -119,14 +119,16 @@ final class FirestoreService {
     func fetchAllEvents(uid: String) async throws -> [PeeEvent] {
         let eventsRef = db.collection("users").document(uid).collection("events")
         let snapshot = try await getDocuments(query: eventsRef.order(by: "updatedAt", descending: true))
-        return snapshot.documents.compactMap { decodeEvent(uid: uid, document: $0) }
+        let result = snapshot.documents.compactMap { decodeEvent(uid: uid, document: $0) }
+        return result
     }
 
     func fetchEventsSince(uid: String, since: Date) async throws -> [PeeEvent] {
         let eventsRef = db.collection("users").document(uid).collection("events")
         let query = eventsRef.whereField("updatedAt", isGreaterThan: since)
         let snapshot = try await getDocuments(query: query)
-        return snapshot.documents.compactMap { decodeEvent(uid: uid, document: $0) }
+        let result = snapshot.documents.compactMap { decodeEvent(uid: uid, document: $0) }
+        return result
     }
 
     // MARK: - Mapping

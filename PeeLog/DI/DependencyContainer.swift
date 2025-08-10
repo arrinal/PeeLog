@@ -30,7 +30,8 @@ class DependencyContainer: ObservableObject {
     private var sharedUserRepository: UserRepository?
     private var sharedAuthRepository: AuthRepository?
     private var sharedSyncCoordinator: SyncCoordinator?
-    private var sharedMigrationController: MigrationController?
+    private var migrationControllers: [ObjectIdentifier: MigrationController] = [:]
+    private let syncControl = SyncControl()
     
     init() {
         // Initialize core services
@@ -103,6 +104,7 @@ class DependencyContainer: ObservableObject {
     
     // MARK: - Cloud Services Accessors
     func getFirestoreService() -> FirestoreService { firestoreService }
+    func getSyncControl() -> SyncControl { syncControl }
 
     // MARK: - Coordinators / Controllers
     func makeSyncCoordinator(modelContext: ModelContext) -> SyncCoordinator {
@@ -110,20 +112,24 @@ class DependencyContainer: ObservableObject {
         let coordinator = SyncCoordinator(
             peeEventRepository: getPeeEventRepository(modelContext: modelContext),
             userRepository: getUserRepository(modelContext: modelContext),
-            firestoreService: firestoreService
+            firestoreService: firestoreService,
+            syncControl: syncControl
         )
         sharedSyncCoordinator = coordinator
         return coordinator
     }
     
     func makeMigrationController(modelContext: ModelContext) -> MigrationController {
-        if let shared = sharedMigrationController { return shared }
+        let contextId = ObjectIdentifier(modelContext)
+        if let existing = migrationControllers[contextId] {
+            return existing
+        }
         let controller = MigrationControllerImpl(
             userRepository: getUserRepository(modelContext: modelContext),
             peeEventRepository: getPeeEventRepository(modelContext: modelContext),
             firestoreService: firestoreService
         )
-        sharedMigrationController = controller
+        migrationControllers[contextId] = controller
         return controller
     }
     
@@ -193,6 +199,7 @@ class DependencyContainer: ObservableObject {
         // Optional: inject skip use case wired to controller
         let skip = SkipMigrationUseCase(migrationController: makeMigrationController(modelContext: modelContext))
         authVM.setSkipMigrationUseCase(skip)
+        authVM.setSyncControl(syncControl)
         return authVM
     }
     

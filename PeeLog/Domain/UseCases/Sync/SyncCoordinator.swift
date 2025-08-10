@@ -13,18 +13,21 @@ final class SyncCoordinator {
     private let peeEventRepository: PeeEventRepository
     private let userRepository: UserRepository
     private let firestoreService: FirestoreService
+    private let syncControl: SyncControl
     
-    init(peeEventRepository: PeeEventRepository, userRepository: UserRepository, firestoreService: FirestoreService) {
+    init(peeEventRepository: PeeEventRepository, userRepository: UserRepository, firestoreService: FirestoreService, syncControl: SyncControl) {
         self.peeEventRepository = peeEventRepository
         self.userRepository = userRepository
         self.firestoreService = firestoreService
+        self.syncControl = syncControl
     }
     
     // MARK: - Initial full sync
     func initialFullSync() async throws {
         guard let uid = Auth.auth().currentUser?.uid else { return }
-        let user = await userRepository.getCurrentUser()
-        guard let user = user, !user.isGuest, user.preferences.syncEnabled else { return }
+        if syncControl.isBlocked {
+            return
+        }
         
         // Pull cloud snapshot and replace local
         let events = try await firestoreService.fetchAllEvents(uid: uid)
@@ -36,8 +39,9 @@ final class SyncCoordinator {
     // MARK: - Incremental sync
     func incrementalSync(since: Date) async throws {
         guard let uid = Auth.auth().currentUser?.uid else { return }
+        if syncControl.isBlocked { return }
         let user = await userRepository.getCurrentUser()
-        guard let user = user, !user.isGuest, user.preferences.syncEnabled else { return }
+        guard let user = user, !user.isGuest else { return }
         
         // Upload local (all for now; could be optimized using metadata)
         let localEvents = peeEventRepository.getAllEvents()
@@ -55,6 +59,7 @@ final class SyncCoordinator {
     // MARK: - Logout sync
     func syncBeforeLogout() async throws {
         guard let uid = Auth.auth().currentUser?.uid else { return }
+        if syncControl.isBlocked { return }
         // Upload any local events prior to logout
         let localEvents = peeEventRepository.getAllEvents()
         try await firestoreService.upsertEvents(uid: uid, events: localEvents)

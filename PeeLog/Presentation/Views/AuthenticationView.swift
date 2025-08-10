@@ -106,7 +106,6 @@ struct AuthenticationView: View {
             // Check if authentication was successful
             switch newState {
             case .authenticated, .guest:
-                // Authentication successful, call the success callback
                 onAuthenticationSuccess?()
             default:
                 break
@@ -123,15 +122,10 @@ struct AuthenticationView: View {
         } message: {
             Text(viewModel.errorMessage)
         }
-        .alert("Migrate Guest Data", isPresented: $viewModel.showGuestMigrationAlert) {
-            Button("Migrate") { Task { await viewModel.proceedWithMigration() } }
-            Button("Skip", role: .destructive) { Task { await viewModel.skipMigration() } }
-        } message: { Text("You have existing guest data. Would you like to migrate it to your new account?") }
-        .confirmationDialog("Guest data detected", isPresented: $viewModel.showMigrationDialog, titleVisibility: .visible) {
-            Button("Migrate Data") { Task { await viewModel.proceedWithMigration() } }
-            Button("Skip Migration", role: .destructive) { Task { await viewModel.skipMigration() } }
-            Button("Cancel", role: .cancel) {}
-        } message: { Text("Migrate your guest data to your account, or start fresh by skipping migration.") }
+        .confirmationDialog("Unsynced data detected", isPresented: $viewModel.showMigrationDialog, titleVisibility: .visible) {
+            Button("Merge local and cloud data") { Task { await viewModel.mergeLocalWithCloudAfterLogin() } }
+            Button("Use cloud only (replace local)", role: .destructive) { Task { await viewModel.useCloudOnlyAfterLogin() } }
+        } message: { Text("We found local data that isn't synced. Would you like to merge it with your cloud data?") }
 
     }
     

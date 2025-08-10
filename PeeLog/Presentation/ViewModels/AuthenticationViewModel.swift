@@ -17,6 +17,7 @@ final class AuthenticationViewModel: ObservableObject {
     private let migrateGuestDataUseCase: MigrateGuestDataUseCaseProtocol
     private var skipMigrationUseCase: SkipMigrationUseCaseProtocol?
     private let errorHandlingUseCase: ErrorHandlingUseCase
+    private var syncControl: SyncControl?
     
     // MARK: - Published Properties
     @Published var authState: AuthState = .unauthenticated
@@ -48,10 +49,10 @@ final class AuthenticationViewModel: ObservableObject {
     private var temporaryPassword = "" // Store password temporarily for auto-login after verification
     
     // MARK: - Guest Migration
-    @Published var showGuestMigrationAlert = false
     @Published var guestUserToMigrate: User?
     @Published var showMigrationDialog = false
     @Published var isMigrating = false
+    private var pendingAuthenticatedUser: User?
     
     // MARK: - Validation Properties
     @Published var emailError: String?
@@ -74,6 +75,10 @@ final class AuthenticationViewModel: ObservableObject {
         setupValidation()
     }
     
+    func setSyncControl(_ syncControl: SyncControl) {
+        self.syncControl = syncControl
+    }
+
     func setSkipMigrationUseCase(_ useCase: SkipMigrationUseCaseProtocol) {
         self.skipMigrationUseCase = useCase
     }
@@ -117,10 +122,21 @@ final class AuthenticationViewModel: ObservableObject {
         clearErrors()
         
         do {
+            // Preflight: if guest has local data, block sync to avoid premature cloud pull
+            if let guest = await getCurrentGuestUser(), await migrateGuestDataUseCase.canMigrateData(from: guest) {
+                guestUserToMigrate = guest
+                syncControl?.isBlocked = true
+            }
+            // Capture current guest (if any) before authenticating
+            if guestUserToMigrate == nil {
+                guestUserToMigrate = await getCurrentGuestUser()
+            }
             let authResult = try await authenticateUserUseCase.signInWithEmail(email, password: password)
-            authState = .authenticated(authResult.user)
+            // Defer finalization until merge decision (if needed)
+            pendingAuthenticatedUser = authResult.user
             currentUser = authResult.user
             clearForm()
+            await handlePostLoginSuccess()
         } catch {
             handleError(error)
         }
@@ -135,12 +151,9 @@ final class AuthenticationViewModel: ObservableObject {
         clearErrors()
         
         do {
-            // Check if there's a guest user to migrate
-            if let guestUser = await getCurrentGuestUser() {
-                guestUserToMigrate = guestUser
-                showMigrationDialog = true
-                isLoading = false
-                return
+            // Record guest user if exists, but do NOT show dialog yet
+            if guestUserToMigrate == nil {
+                guestUserToMigrate = await getCurrentGuestUser()
             }
             
             let _ = try await authenticateUserUseCase.registerWithEmail(
@@ -185,17 +198,20 @@ final class AuthenticationViewModel: ObservableObject {
         clearErrors()
         
         do {
-            // Check if there's a guest user to migrate
-            if let guestUser = await getCurrentGuestUser() {
-                guestUserToMigrate = guestUser
-                showMigrationDialog = true
-                isLoading = false
-                return
+            // Preflight: if guest has local data, block sync to avoid premature cloud pull
+            if let guest = await getCurrentGuestUser(), await migrateGuestDataUseCase.canMigrateData(from: guest) {
+                guestUserToMigrate = guest
+                syncControl?.isBlocked = true
+            }
+            // Record guest user if exists, but do NOT show dialog yet
+            if guestUserToMigrate == nil {
+                guestUserToMigrate = await getCurrentGuestUser()
             }
             
             let authResult = try await authenticateUserUseCase.signInWithApple()
-            authState = .authenticated(authResult.user)
+            pendingAuthenticatedUser = authResult.user
             currentUser = authResult.user
+            await handlePostLoginSuccess()
         } catch {
             handleError(error)
         }
@@ -288,20 +304,15 @@ final class AuthenticationViewModel: ObservableObject {
     private func signInAfterVerification() async {
         // Sign in the user after email verification
         do {
-            let authResult = try await authenticateUserUseCase.signInWithEmail(verificationEmail, password: temporaryPassword)
-            
-            // Check if there's guest data to migrate
-            if let guestUser = guestUserToMigrate {
-                try await migrateGuestDataUseCase.migrateGuestData(
-                    guestUser: guestUser,
-                    to: authResult.user
-                )
-                guestUserToMigrate = nil
+            // Preflight: block sync if we plan to merge
+            if let guest = guestUserToMigrate, await migrateGuestDataUseCase.canMigrateData(from: guest) {
+                syncControl?.isBlocked = true
             }
-            
-            authState = .authenticated(authResult.user)
+            let authResult = try await authenticateUserUseCase.signInWithEmail(verificationEmail, password: temporaryPassword)
+            pendingAuthenticatedUser = authResult.user
             currentUser = authResult.user
             showEmailVerification = false
+            await handlePostLoginSuccess()
             resetEmailVerificationForm()
         } catch {
             verificationMessage = "Failed to sign in after verification. Please try signing in manually."
@@ -334,92 +345,45 @@ final class AuthenticationViewModel: ObservableObject {
     
     // MARK: - Guest Migration
     
-    func proceedWithMigration() async {
-        guard let guestUser = guestUserToMigrate else { return }
-        
+    // MARK: - Post-login merge decision API (new wording)
+    func mergeLocalWithCloudAfterLogin() async {
+        guard let pendingUser = pendingAuthenticatedUser, let guestUser = guestUserToMigrate else {
+            // If we have no guest data, just finalize
+            finalizeAuthentication()
+            return
+        }
         isLoading = true
-        showGuestMigrationAlert = false
         showMigrationDialog = false
-        
         do {
-            let authResult: AuthResult
-            
-            // Determine which authentication method to use based on form state
-            if !email.isEmpty && !password.isEmpty {
-                // Email/password registration
-                authResult = try await authenticateUserUseCase.registerWithEmail(
-                    email,
-                    password: password,
-                    displayName: displayName.isEmpty ? nil : displayName
-                )
-                
-                // Store migration info for after email verification
-                guestUserToMigrate = guestUser
-                
-                // Don't authenticate the user yet - show verification UI instead
-                verificationEmail = email
-                temporaryPassword = password
-                verificationMessage = ""
-                showEmailVerification = true
-                startResendCooldown()
-                
-                // Clear form but don't update auth state or clear guest user yet
-                clearForm()
-            } else {
-                // Apple Sign In (when migration is triggered from Apple Sign In)
-                authResult = try await authenticateUserUseCase.signInWithApple()
-                
-                // Migrate guest data immediately for Apple Sign In (no email verification needed)
-                try await migrateGuestDataUseCase.migrateGuestData(
-                    guestUser: guestUser,
-                    to: authResult.user
-                )
-                
-                authState = .authenticated(authResult.user)
-                currentUser = authResult.user
-                clearForm()
-                guestUserToMigrate = nil
-            }
-        } catch {
-            handleError(error)
-        }
-        
-        isLoading = false
-    }
-    
-    func proceedWithAppleMigration() async {
-        guard let guestUser = guestUserToMigrate else { return }
-        
-        isLoading = true
-        showGuestMigrationAlert = false
-        
-        do {
-            // Proceed with Apple Sign In
-            let authResult = try await authenticateUserUseCase.signInWithApple()
-            
-            // Migrate guest data
-            try await migrateGuestDataUseCase.migrateGuestData(
-                guestUser: guestUser,
-                to: authResult.user
-            )
-            
-            authState = .authenticated(authResult.user)
-            currentUser = authResult.user
-            clearForm()
+            syncControl?.isBlocked = true
+            // Upload local guest events to cloud, then pull snapshot and replace local
+            try await migrateGuestDataUseCase.migrateGuestData(guestUser: guestUser, to: pendingUser)
             guestUserToMigrate = nil
+            finalizeAuthentication()
         } catch {
             handleError(error)
         }
-        
+        syncControl?.isBlocked = false
         isLoading = false
     }
     
-    func skipMigration() async {
-        showGuestMigrationAlert = false
-        guestUserToMigrate = nil
-        
-        // Proceed with normal registration (email verification required)
-        await registerWithEmail()
+    func useCloudOnlyAfterLogin() async {
+        guard let pendingUser = pendingAuthenticatedUser else {
+            finalizeAuthentication()
+            return
+        }
+        isLoading = true
+        showMigrationDialog = false
+        do {
+            syncControl?.isBlocked = true
+            try await skipMigrationUseCase?.skipMigration(for: pendingUser)
+            guestUserToMigrate = nil
+            finalizeAuthentication()
+        } catch {
+            handleError(error)
+        }
+        syncControl?.isBlocked = false
+        isLoading = false
     }
     
     // MARK: - Form Management
@@ -545,6 +509,28 @@ final class AuthenticationViewModel: ObservableObject {
             // For other errors, create a generic AuthError
             authState = .error(.unknown(result.userMessage))
         }
+    }
+    
+    // MARK: - Helpers (post-login)
+    private func handlePostLoginSuccess() async {
+        // If there is guest data and local events exist, present merge dialog
+        if let guest = guestUserToMigrate, await migrateGuestDataUseCase.canMigrateData(from: guest) {
+            showMigrationDialog = true
+            return
+        }
+        // Otherwise finalize immediately
+        finalizeAuthentication()
+    }
+    
+    private func finalizeAuthentication() {
+        if let user = pendingAuthenticatedUser {
+            authState = .authenticated(user)
+        }
+        // Unblock sync if it was blocked but we are finalizing without merge dialog
+        if syncControl?.isBlocked == true {
+            syncControl?.isBlocked = false
+        }
+        pendingAuthenticatedUser = nil
     }
     
     private func getCurrentGuestUser() async -> User? {

@@ -200,25 +200,7 @@ struct ProfileView: View {
                     }
             }
             
-            // Sync Toggle (only for authenticated users)
-            if viewModel.currentUser?.authProvider != .guest {
-                HStack {
-                    Image(systemName: "icloud.fill")
-                        .foregroundColor(.blue)
-                        .frame(width: 20)
-                    
-                    Text("Sync Data")
-                    
-                    Spacer()
-                    
-                    Toggle("", isOn: $viewModel.syncEnabled)
-                        .onChange(of: viewModel.syncEnabled) { _, enabled in
-                            Task {
-                                await viewModel.updateSyncPreference(enabled)
-                            }
-                        }
-                }
-            }
+            // Sync always-on for authenticated users; no toggle shown
         }
     }
     
