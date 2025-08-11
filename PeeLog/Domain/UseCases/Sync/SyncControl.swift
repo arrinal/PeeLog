@@ -11,5 +11,3 @@ import Foundation
 final class SyncControl {
     var isBlocked: Bool = false
 }
-
-

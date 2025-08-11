@@ -9,6 +9,7 @@ import Foundation
 
 extension Notification.Name {
     static let eventsDidSync = Notification.Name("eventsDidSync")
+    static let requestInitialFullSync = Notification.Name("requestInitialFullSync")
 }
 
 

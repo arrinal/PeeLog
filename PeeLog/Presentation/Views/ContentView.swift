@@ -41,6 +41,12 @@ struct ContentView: View {
         .task {
             await checkAuthenticationState()
             setupAuthStateObserver()
+            NotificationCenter.default.addObserver(forName: .requestInitialFullSync, object: nil, queue: .main) { _ in
+                Task { @MainActor in
+                    let sync = container.makeSyncCoordinator(modelContext: modelContext)
+                    try? await sync.initialFullSync()
+                }
+            }
         }
     }
     

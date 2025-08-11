@@ -53,6 +53,7 @@ final class AuthenticationViewModel: ObservableObject {
     @Published var showMigrationDialog = false
     @Published var isMigrating = false
     private var pendingAuthenticatedUser: User?
+    private var preLoginHasLocalGuestData = false
     
     // MARK: - Validation Properties
     @Published var emailError: String?
@@ -122,10 +123,14 @@ final class AuthenticationViewModel: ObservableObject {
         clearErrors()
         
         do {
-            // Preflight: if guest has local data, block sync to avoid premature cloud pull
-            if let guest = await getCurrentGuestUser(), await migrateGuestDataUseCase.canMigrateData(from: guest) {
+            // Preflight: capture guest and whether local data existed BEFORE login
+            if let guest = await getCurrentGuestUser() {
                 guestUserToMigrate = guest
-                syncControl?.isBlocked = true
+                let hasLocal = await migrateGuestDataUseCase.canMigrateData(from: guest)
+                preLoginHasLocalGuestData = hasLocal
+                if hasLocal { syncControl?.isBlocked = true }
+            } else {
+                preLoginHasLocalGuestData = false
             }
             // Capture current guest (if any) before authenticating
             if guestUserToMigrate == nil {
@@ -198,10 +203,14 @@ final class AuthenticationViewModel: ObservableObject {
         clearErrors()
         
         do {
-            // Preflight: if guest has local data, block sync to avoid premature cloud pull
-            if let guest = await getCurrentGuestUser(), await migrateGuestDataUseCase.canMigrateData(from: guest) {
+            // Preflight: capture guest and whether local data existed BEFORE login
+            if let guest = await getCurrentGuestUser() {
                 guestUserToMigrate = guest
-                syncControl?.isBlocked = true
+                let hasLocal = await migrateGuestDataUseCase.canMigrateData(from: guest)
+                preLoginHasLocalGuestData = hasLocal
+                if hasLocal { syncControl?.isBlocked = true }
+            } else {
+                preLoginHasLocalGuestData = false
             }
             // Record guest user if exists, but do NOT show dialog yet
             if guestUserToMigrate == nil {
@@ -304,9 +313,18 @@ final class AuthenticationViewModel: ObservableObject {
     private func signInAfterVerification() async {
         // Sign in the user after email verification
         do {
-            // Preflight: block sync if we plan to merge
-            if let guest = guestUserToMigrate, await migrateGuestDataUseCase.canMigrateData(from: guest) {
-                syncControl?.isBlocked = true
+            // Preflight: capture whether local data existed BEFORE auto-login after verify
+            var guestMaybe = guestUserToMigrate
+            if guestMaybe == nil {
+                guestMaybe = await getCurrentGuestUser()
+            }
+            if let guest = guestMaybe {
+                guestUserToMigrate = guest
+                let hasLocal = await migrateGuestDataUseCase.canMigrateData(from: guest)
+                preLoginHasLocalGuestData = hasLocal
+                if hasLocal { syncControl?.isBlocked = true }
+            } else {
+                preLoginHasLocalGuestData = false
             }
             let authResult = try await authenticateUserUseCase.signInWithEmail(verificationEmail, password: temporaryPassword)
             pendingAuthenticatedUser = authResult.user
@@ -513,8 +531,8 @@ final class AuthenticationViewModel: ObservableObject {
     
     // MARK: - Helpers (post-login)
     private func handlePostLoginSuccess() async {
-        // If there is guest data and local events exist, present merge dialog
-        if let guest = guestUserToMigrate, await migrateGuestDataUseCase.canMigrateData(from: guest) {
+        // If guest existed and local data existed BEFORE login, present merge dialog
+        if guestUserToMigrate != nil && preLoginHasLocalGuestData {
             showMigrationDialog = true
             return
         }
@@ -529,7 +547,9 @@ final class AuthenticationViewModel: ObservableObject {
         // Unblock sync if it was blocked but we are finalizing without merge dialog
         if syncControl?.isBlocked == true {
             syncControl?.isBlocked = false
+            NotificationCenter.default.post(name: .requestInitialFullSync, object: nil)
         }
+        preLoginHasLocalGuestData = false
         pendingAuthenticatedUser = nil
     }
     
