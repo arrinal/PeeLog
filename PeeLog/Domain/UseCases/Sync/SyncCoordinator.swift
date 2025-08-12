@@ -68,6 +68,25 @@ final class SyncCoordinator {
             try await firestoreService.saveUser(uid: uid, localUser: user)
         }
     }
+
+    // MARK: - Immediate single-event syncs
+    func syncUpsertSingleEvent(_ event: PeeEvent) async throws {
+        guard let uid = Auth.auth().currentUser?.uid else { return }
+        if syncControl.isBlocked { return }
+        let user = await userRepository.getCurrentUser()
+        guard let user = user, !user.isGuest else { return }
+        try await firestoreService.upsertEvents(uid: uid, events: [event])
+        NotificationCenter.default.post(name: .eventsDidSync, object: nil)
+    }
+
+    func syncDeleteSingleEvent(_ event: PeeEvent) async throws {
+        guard let uid = Auth.auth().currentUser?.uid else { return }
+        if syncControl.isBlocked { return }
+        let user = await userRepository.getCurrentUser()
+        guard let user = user, !user.isGuest else { return }
+        try await firestoreService.deleteEvent(uid: uid, eventId: event.id)
+        NotificationCenter.default.post(name: .eventsDidSync, object: nil)
+    }
 }
 
 

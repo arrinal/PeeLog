@@ -138,7 +138,8 @@ class DependencyContainer: ObservableObject {
         let repository = getPeeEventRepository(modelContext: modelContext)
         return HomeViewModel(
             getTodaysPeeEventsUseCase: GetTodaysPeeEventsUseCase(repository: repository),
-            deleteEventUseCase: DeletePeeEventUseCase(repository: repository)
+            deleteEventUseCase: DeletePeeEventUseCase(repository: repository),
+            syncCoordinator: makeSyncCoordinator(modelContext: modelContext)
         )
     }
     
@@ -154,7 +155,8 @@ class DependencyContainer: ObservableObject {
         return AddEventViewModel(
             addPeeEventUseCase: AddPeeEventUseCase(repository: repository),
             locationRepository: locationRepository,
-            errorHandlingUseCase: errorHandlingUseCase
+            errorHandlingUseCase: errorHandlingUseCase,
+            syncCoordinator: makeSyncCoordinator(modelContext: modelContext)
         )
     }
     

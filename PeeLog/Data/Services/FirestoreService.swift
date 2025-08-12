@@ -116,6 +116,16 @@ final class FirestoreService {
         try await commit(batch: batch)
     }
 
+    func deleteEvent(uid: String, eventId: UUID) async throws {
+        let ref = db.collection("users").document(uid).collection("events").document(eventId.uuidString)
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            ref.delete { error in
+                if let error = error { continuation.resume(throwing: error) }
+                else { continuation.resume() }
+            }
+        }
+    }
+
     func fetchAllEvents(uid: String) async throws -> [PeeEvent] {
         let eventsRef = db.collection("users").document(uid).collection("events")
         let snapshot = try await getDocuments(query: eventsRef.order(by: "updatedAt", descending: true))

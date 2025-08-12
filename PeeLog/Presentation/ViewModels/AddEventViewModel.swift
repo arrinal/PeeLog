@@ -16,6 +16,7 @@ class AddEventViewModel: ObservableObject {
     private let addPeeEventUseCase: AddPeeEventUseCase
     private let locationRepository: LocationRepository
     private let errorHandlingUseCase: ErrorHandlingUseCase
+    private let syncCoordinator: SyncCoordinator
     private var cancellables = Set<AnyCancellable>()
     
     @Published var date = Date()
@@ -35,10 +36,11 @@ class AddEventViewModel: ObservableObject {
     @Published var showErrorAlert = false
     @Published var errorMessage = ""
     
-    init(addPeeEventUseCase: AddPeeEventUseCase, locationRepository: LocationRepository, errorHandlingUseCase: ErrorHandlingUseCase) {
+    init(addPeeEventUseCase: AddPeeEventUseCase, locationRepository: LocationRepository, errorHandlingUseCase: ErrorHandlingUseCase, syncCoordinator: SyncCoordinator) {
         self.addPeeEventUseCase = addPeeEventUseCase
         self.locationRepository = locationRepository
         self.errorHandlingUseCase = errorHandlingUseCase
+        self.syncCoordinator = syncCoordinator
         
         setupLocationObservers()
     }
@@ -133,6 +135,8 @@ class AddEventViewModel: ObservableObject {
         do {
             let event = try await createPeeEvent()
             try addPeeEventUseCase.execute(event: event)
+            // Fire-and-forget cloud upsert for authenticated users
+            Task { try? await syncCoordinator.syncUpsertSingleEvent(event) }
         } catch {
             await handleSaveError(error)
         }
