@@ -271,9 +271,13 @@ struct EventCard: View {
     @State private var offset: CGFloat = 0
     @State private var isDeleting = false
     @State private var isDragging = false
+    @State private var dragDirection: DragDirection = .none
+    @State private var swipeActivated = false
     
     private let screenWidth = UIScreen.main.bounds.width
-    private let deleteThreshold: CGFloat = UIScreen.main.bounds.width * 0.75
+    private let deleteThreshold: CGFloat = UIScreen.main.bounds.width * 0.50
+    private let leftSwipeActivation: CGFloat = 16 // slightly larger deadzone to avoid jitter
+    private let directionThreshold: CGFloat = 20
     
     var body: some View {
         ZStack {
@@ -299,7 +303,7 @@ struct EventCard: View {
                                 .padding(.trailing, 20)
                             }
                         )
-                        .frame(width: max(abs(offset), screenWidth))
+                        .frame(width: max(abs(offset), 0.1))
                         .cornerRadius(16, corners: [.topRight, .bottomRight])
                 }
             }
@@ -395,31 +399,61 @@ struct EventCard: View {
             .offset(x: offset)
             .scaleEffect(isDeleting ? 0.9 : 1.0)
             .opacity(isDeleting ? 0.4 : 1.0)
-            .gesture(
-                DragGesture()
+            .animation(.none, value: offset)
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 1, coordinateSpace: .local)
                     .onChanged { value in
                         // Prevent interaction if already deleting
                         guard !isDeleting else { return }
                         
+                        // Decide drag intent once with threshold so vertical scroll can begin immediately
+                        if dragDirection == .none {
+                            let absX = abs(value.translation.width)
+                            let absY = abs(value.translation.height)
+                            if absX > directionThreshold && absX > absY {
+                                dragDirection = .horizontal
+                            } else if absY > directionThreshold && absY > absX {
+                                dragDirection = .vertical
+                            } else {
+                                return
+                            }
+                        }
+                        
+                        // Let vertical movement pass through to ScrollView (for pull-to-refresh and scroll)
+                        guard dragDirection == .horizontal else { return }
+
+                        // Horizontal drag handling with activation latch
+                        isDragging = true
+                        let tx = value.translation.width
+                        
+                        if !swipeActivated {
+                            if tx <= -leftSwipeActivation {
+                                swipeActivated = true
+                            } else {
+                                // Still in deadzone: keep card steady
+                                offset = 0
+                                return
+                            }
+                        }
+                        
                         // Only allow left swipe (negative translation)
-                        if value.translation.width < 0 {
-                            isDragging = true
-                            
-                            // Allow card to move up to full screen width with progressive resistance
-                            let dragDistance = abs(value.translation.width)
+                        if tx < 0 {
+                            // Compute distance past activation to keep smooth onset from 0
+                            let effectiveTx = tx + leftSwipeActivation
+                            let dragDistance = abs(effectiveTx)
                             
                             if dragDistance <= deleteThreshold {
-                                // Linear movement for first 75% of screen
-                                offset = value.translation.width
+                                // Linear movement until threshold
+                                offset = -dragDistance
                             } else {
-                                // Progressive resistance after 75%
-                                let excessDistance = dragDistance - deleteThreshold
-                                let resistance = min(excessDistance / (screenWidth * 0.25), 1.0)
-                                let resistedDistance = excessDistance * (1.0 - resistance * 0.7)
-                                offset = -(deleteThreshold + resistedDistance)
+                                // Progressive resistance after threshold
+                                let excess = dragDistance - deleteThreshold
+                                let resistance = min(excess / (screenWidth * 0.25), 1.0)
+                                let resisted = excess * (1.0 - resistance * 0.7)
+                                offset = -(deleteThreshold + resisted)
                             }
-                        } else if isDragging {
-                            // If dragging right while already swiping left, reset
+                        } else {
+                            // Dragging right while engaged: approach zero but don't overshoot
                             offset = 0
                         }
                     }
@@ -430,12 +464,17 @@ struct EventCard: View {
                         // Mark as no longer dragging
                         isDragging = false
                         
-                        let swipeDistance = abs(value.translation.width)
-                        let swipeVelocity = abs(value.velocity.width)
+                        defer { dragDirection = .none }
+                        guard dragDirection == .horizontal else {
+                            // Vertical drag finished: ensure reset
+                            offset = 0
+                            return
+                        }
                         
-                        // Native iOS-like deletion logic
-                        let shouldDelete = swipeDistance >= deleteThreshold || 
-                                         (swipeVelocity > 1000 && swipeDistance > screenWidth * 0.3)
+                        let totalLeftTravel = max(0, -value.translation.width - leftSwipeActivation)
+                        
+                        // Decide deletion only if sufficiently far to the left
+                        let shouldDelete = totalLeftTravel >= deleteThreshold
                         
                         if shouldDelete {
                             // Mark as deleting to prevent further interactions
@@ -451,15 +490,20 @@ struct EventCard: View {
                                 onDelete()
                             }
                         } else {
-                            // iOS 17 Fix: Simple immediate reset without complex animations
-                            offset = 0
+                            // Reset with a gentle spring
+                            withAnimation(.interactiveSpring(response: 0.25, dampingFraction: 0.86, blendDuration: 0.12)) {
+                                offset = 0
+                            }
                         }
+                        swipeActivated = false
                     }
             )
         }
         .clipped()
     }
 }
+
+private enum DragDirection { case none, horizontal, vertical }
 
 #Preview {
     let container = try! ModelContainer(for: PeeEvent.self)
