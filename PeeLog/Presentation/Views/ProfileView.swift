@@ -36,9 +36,6 @@ struct ProfileView: View {
                 appInfoSection
             }
             .navigationTitle("Profile")
-            .refreshable {
-                await viewModel.loadUserProfile()
-            }
         }
         .sheet(isPresented: $viewModel.showAuthenticationView) {
             AuthenticationView.makeWithDependencies(
@@ -56,23 +53,26 @@ struct ProfileView: View {
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
         }
-        .alert("Error", isPresented: $viewModel.showError) {
-            Button("OK") {
-                viewModel.clearErrors()
-            }
-        } message: {
-            Text(viewModel.errorMessage)
-        }
-        .alert("Confirm Sign Out", isPresented: $viewModel.showSignOutConfirmation) {
-            Button("Sign Out", role: .destructive) {
-                Task {
-                    await viewModel.signOut()
-                }
-            }
-            Button("Cancel", role: .cancel) { }
-        } message: {
-            Text("Are you sure you want to sign out?")
-        }
+        .appAlert(
+            isPresented: $viewModel.showError,
+            title: "Something went wrong",
+            message: viewModel.errorMessage,
+            iconSystemName: "exclamationmark.triangle.fill",
+            primaryTitle: "OK",
+            onPrimary: { viewModel.clearErrors() }
+        )
+        .appConfirm(
+            isPresented: $viewModel.showSignOutConfirmation,
+            title: "Confirm Sign Out",
+            message: "Are you sure you want to sign out?",
+            iconSystemName: "rectangle.portrait.and.arrow.right.fill",
+            primaryTitle: "Sign Out",
+            primaryDestructive: true,
+            onPrimary: { Task { await viewModel.signOut() } },
+            secondaryTitle: "Cancel",
+            secondaryDestructive: false,
+            onSecondary: { }
+        )
         .task {
             await viewModel.loadUserProfile()
         }

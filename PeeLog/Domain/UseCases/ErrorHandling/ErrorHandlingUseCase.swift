@@ -220,6 +220,36 @@ class ErrorHandlingUseCaseImpl: ErrorHandlingUseCase {
         switch error {
         case let appError as AppError:
             return appError
+        case let authError as AuthError:
+            // Map our AuthError to AppError with clearer messages
+            switch authError {
+            case .invalidCredentials:
+                return .invalidInput("Email or password is incorrect.")
+            case .userNotFound:
+                return .invalidInput("We couldn't find an account with that email.")
+            case .emailAlreadyInUse:
+                return .invalidInput("That email is already registered.")
+            case .weakPassword:
+                return .invalidInput("Password is too weak. Use at least 8 characters with a mix of letters and numbers.")
+            case .invalidEmail:
+                return .invalidInput("Please enter a valid email address.")
+            case .emailNotVerified:
+                return .permissionDenied("Please verify your email before signing in.")
+            case .networkError(let message):
+                return .networkError(message)
+            case .serviceUnavailable:
+                return .serviceUnavailable("Authentication service is temporarily unavailable.")
+            case .tokenExpired:
+                return .permissionDenied("Your session expired. Please sign in again.")
+            case .noToken, .noRefreshToken:
+                return .permissionDenied("Missing credentials. Please sign in again.")
+            case .userDisabled:
+                return .permissionDenied("This account has been disabled.")
+            case .tooManyRequests:
+                return .serviceUnavailable("Too many attempts. Please wait and try again.")
+            case .unknown(let message):
+                return .unknown(message)
+            }
             
         case let locationError as LocationError:
             return .locationError(locationError)
@@ -246,6 +276,42 @@ class ErrorHandlingUseCaseImpl: ErrorHandlingUseCase {
             return .saveFailed("Cannot save file: \(error.localizedDescription)")
             
         default:
+            // Try mapping Firestore NSError codes if present
+            let nsError = error as NSError
+            if nsError.domain == "FIRFirestoreErrorDomain" || nsError.domain == "FirebaseFirestore" {
+                switch nsError.code {
+                case 14: // unavailable
+                    return .serviceUnavailable("Cloud database is temporarily unavailable. Please try again.")
+                case 7: // permissionDenied
+                    return .permissionDenied("You don't have permission to access this data.")
+                case 16: // unauthenticated
+                    return .permissionDenied("Your session is not authenticated. Please sign in again.")
+                case 4: // deadlineExceeded
+                    return .timeout("The request took too long. Please try again.")
+                case 3: // invalidArgument
+                    return .invalidInput("Invalid data sent to the server.")
+                case 5: // notFound
+                    return .loadFailed("Requested data was not found.")
+                case 6: // alreadyExists
+                    return .saveFailed("Data already exists.")
+                case 10: // aborted
+                    return .serviceUnavailable("The operation was aborted. Please retry.")
+                case 13: // internal
+                    return .serviceUnavailable("A server error occurred. Please try again later.")
+                case 11: // outOfRange
+                    return .invalidInput("Some values are out of range.")
+                case 12: // unimplemented
+                    return .serviceUnavailable("This operation is not supported.")
+                case 15: // dataLoss
+                    return .dataCorruption("Data loss detected while fetching from cloud.")
+                case 1: // cancelled
+                    return .unknown("The request was cancelled.")
+                case 2: // unknown
+                    fallthrough
+                default:
+                    return .unknown(nsError.localizedDescription)
+                }
+            }
             return .unknown(error.localizedDescription)
         }
     }
@@ -282,26 +348,26 @@ class ErrorHandlingUseCaseImpl: ErrorHandlingUseCase {
     }
     
     func generateUserMessage(for error: AppError, strategy: ErrorRecoveryStrategy) -> String {
-        let baseMessage = error.errorDescription ?? "An error occurred"
+        let baseMessage = error.errorDescription ?? ""
         let recoveryMessage = error.recoverySuggestion ?? ""
         
         var message = baseMessage
         
-        if !recoveryMessage.isEmpty {
-            message += "\n\n\(recoveryMessage)"
-        }
-        
-        switch strategy {
-        case .retry:
-            message += "\n\nThe app will try again automatically."
-        case .userAction:
-            message += "\n\nPlease take action and try again."
-        case .fallback:
-            message += "\n\nUsing alternative method."
-        case .restart:
-            message += "\n\nPlease restart the app."
-        case .ignore:
-            message += "\n\nYou can continue using the app."
+        if message.isEmpty {
+            message += "An error occurred\n\n\(recoveryMessage)"
+            
+            switch strategy {
+            case .retry:
+                message += "\n\nThe app will try again automatically."
+            case .userAction:
+                message += "\n\nPlease take action and try again."
+            case .fallback:
+                message += "\n\nUsing alternative method."
+            case .restart:
+                message += "\n\nPlease restart the app."
+            case .ignore:
+                message += "\n\nYou can continue using the app."
+            }
         }
         
         return message

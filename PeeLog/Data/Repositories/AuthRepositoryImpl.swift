@@ -25,6 +25,8 @@ final class AuthRepositoryImpl: AuthRepository {
     // Flag to prevent Firebase auth observer interference during sign-out
     private var isSigningOut = false
     private var signOutCompletionTime: Date?
+    // Flag to suppress auth state promotion during registration flow
+    private var isRegisteringNewUser = false
     
     init(firebaseAuthService: FirebaseAuthService, modelContext: ModelContext) {
         self.firebaseAuthService = firebaseAuthService
@@ -61,8 +63,8 @@ final class AuthRepositoryImpl: AuthRepository {
                     guard let self = self else { return }
                     
                     if isSignedIn {
-                        // Prevent handleFirebaseSignIn during sign-out to avoid race condition
-                        if !self.isSigningOut {
+                        // Prevent handleFirebaseSignIn during sign-out or registration to avoid race conditions
+                        if !self.isSigningOut && !self.isRegisteringNewUser {
                             await self.handleFirebaseSignIn()
                         }
                     } else {
@@ -246,6 +248,10 @@ final class AuthRepositoryImpl: AuthRepository {
     func registerWithEmail(_ email: String, password: String, displayName: String?) async throws -> AuthResult {
         isLoadingSubject.send(true)
         defer { isLoadingSubject.send(false) }
+        
+        // Suppress auth state promotion while Firebase marks the session signed-in during registration
+        isRegisteringNewUser = true
+        defer { isRegisteringNewUser = false }
         
         do {
             let firebaseUser = try await firebaseAuthService.createUserWithEmail(email, password: password)
