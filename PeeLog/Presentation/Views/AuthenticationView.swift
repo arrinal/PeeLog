@@ -117,15 +117,27 @@ struct AuthenticationView: View {
         .sheet(isPresented: $viewModel.showEmailVerification) {
             emailVerificationSheet
         }
-        .alert("Error", isPresented: $viewModel.showError) {
-            Button("OK") { }
-        } message: {
-            Text(viewModel.errorMessage)
-        }
-        .confirmationDialog("Unsynced data detected", isPresented: $viewModel.showMigrationDialog, titleVisibility: .visible) {
-            Button("Merge local and cloud data") { Task { await viewModel.mergeLocalWithCloudAfterLogin() } }
-            Button("Use cloud only (replace local)", role: .destructive) { Task { await viewModel.useCloudOnlyAfterLogin() } }
-        } message: { Text("We found local data that isn't synced. Would you like to merge it with your cloud data?") }
+        .interactiveDismissDisabled(viewModel.isLoading || viewModel.showMigrationDialog)
+        .appAlert(
+            isPresented: $viewModel.showError,
+            title: "Something went wrong",
+            message: viewModel.errorMessage,
+            iconSystemName: "exclamationmark.triangle.fill",
+            primaryTitle: "OK"
+        )
+        .appConfirm(
+            isPresented: $viewModel.showMigrationDialog,
+            title: "Unsynced data detected",
+            message: "We found local data that isn't synced. Would you like to merge it with your cloud data?",
+            iconSystemName: "arrow.triangle.2.circlepath.circle.fill",
+            primaryTitle: "Merge local and cloud data",
+            primaryDestructive: false,
+            onPrimary: { Task { await viewModel.mergeLocalWithCloudAfterLogin() } },
+            secondaryTitle: "Use cloud only (replace local)",
+            secondaryDestructive: true,
+            onSecondary: { Task { await viewModel.useCloudOnlyAfterLogin() } },
+            allowsClose: false
+        )
 
     }
     

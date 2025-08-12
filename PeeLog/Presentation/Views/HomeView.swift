@@ -12,6 +12,7 @@ import MapKit
 struct HomeView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.dependencyContainer) private var container
     @ObservedObject var viewModel: HomeViewModel
     @State private var showingAddEventSheet = false
     @State private var selectedEvent: PeeEvent?
@@ -149,6 +150,19 @@ struct HomeView: View {
                                 }
                     }
                     .padding(.bottom, 100) // Space for FAB
+                }
+                .refreshable {
+                    let userRepository = container.makeUserRepository(modelContext: modelContext)
+                    let user = await userRepository.getCurrentUser()
+                    if let user, !user.isGuest {
+                        print("[Home] pull-to-refresh: authenticated -> requesting initialFullSync for user=\(user.id)")
+                        NotificationCenter.default.post(name: .requestInitialFullSync, object: nil)
+                    } else {
+                        print("[Home] pull-to-refresh: guest -> local reload only")
+                    }
+                    await MainActor.run {
+                        viewModel.loadTodaysEvents()
+                    }
                 }
                 
                 // Floating Action Button
