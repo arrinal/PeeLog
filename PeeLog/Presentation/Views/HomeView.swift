@@ -142,7 +142,8 @@ struct HomeView: View {
                                                 Label("Delete", systemImage: "trash.fill")
                                             }
                                         }
-                                        .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                                        .transition(.opacity.combined(with: .move(edge: .top)))
+                                        .animation(.easeIn(duration: 0.2), value: viewModel.todaysEvents)
                                     }
                                 }
                                 .padding(.horizontal, 20)
@@ -204,7 +205,9 @@ struct HomeView: View {
             .navigationTitle("")
             .navigationBarHidden(true)
             .sheet(isPresented: $showingAddEventSheet) {
-                viewModel.loadTodaysEvents()
+                withAnimation(.easeIn(duration: 0.25)) {
+                    viewModel.loadTodaysEvents()
+                }
             } content: {
                 AddEventView()
             }
@@ -226,7 +229,9 @@ struct HomeView: View {
         .onReceive(NotificationCenter.default.publisher(for: .eventsDidSync)) { _ in
             // Ensure we hop to the main actor for UI-bound view model
             Task { @MainActor in
-                viewModel.loadTodaysEvents()
+                withAnimation(.easeIn(duration: 0.25)) {
+                    viewModel.loadTodaysEvents()
+                }
             }
         }
     }
