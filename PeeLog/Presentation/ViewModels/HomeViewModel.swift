@@ -13,12 +13,14 @@ import SwiftData
 class HomeViewModel: ObservableObject {
     private let getTodaysPeeEventsUseCase: GetTodaysPeeEventsUseCase
     private let deleteEventUseCase: DeletePeeEventUseCase
+    private let syncCoordinator: SyncCoordinator
     
     @Published var todaysEvents: [PeeEvent] = []
     
-    init(getTodaysPeeEventsUseCase: GetTodaysPeeEventsUseCase, deleteEventUseCase: DeletePeeEventUseCase) {
+    init(getTodaysPeeEventsUseCase: GetTodaysPeeEventsUseCase, deleteEventUseCase: DeletePeeEventUseCase, syncCoordinator: SyncCoordinator) {
         self.getTodaysPeeEventsUseCase = getTodaysPeeEventsUseCase
         self.deleteEventUseCase = deleteEventUseCase
+        self.syncCoordinator = syncCoordinator
     }
     
     func loadTodaysEvents() {
@@ -30,6 +32,7 @@ class HomeViewModel: ObservableObject {
             let event = todaysEvents[index]
             do {
                 try deleteEventUseCase.execute(event: event)
+                Task { try? await syncCoordinator.syncDeleteSingleEvent(event) }
             } catch {
                 print("Error deleting event: \(error)")
             }
@@ -40,6 +43,7 @@ class HomeViewModel: ObservableObject {
     func deleteEvent(event: PeeEvent) {
         do {
             try deleteEventUseCase.execute(event: event)
+            Task { try? await syncCoordinator.syncDeleteSingleEvent(event) }
         } catch {
             print("Error deleting event: \(error)")
         }
