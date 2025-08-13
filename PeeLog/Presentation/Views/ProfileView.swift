@@ -12,6 +12,10 @@ struct ProfileView: View {
     @StateObject private var viewModel: ProfileViewModel
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dependencyContainer) private var container
+    @Environment(\.colorScheme) private var colorScheme
+    
+    // Animated gradient phase (0...1) for full-length border stroke
+    @State private var gradientPhase: Double = 0
     
     init(viewModel: ProfileViewModel) {
         self._viewModel = StateObject(wrappedValue: viewModel)
@@ -128,14 +132,6 @@ struct ProfileView: View {
                 }
                 
                 Spacer()
-                
-                // Show sign in button only for guest users
-                if let user = viewModel.currentUser, user.isGuest {
-                    Button("Sign In") {
-                        viewModel.showAuthenticationView = true
-                    }
-                    .buttonStyle(.bordered)
-                }
             }
             .padding(.vertical, 8)
         }
@@ -159,25 +155,6 @@ struct ProfileView: View {
                 .onChange(of: viewModel.selectedTheme) { _, newTheme in
                     Task {
                         await viewModel.updateThemePreference(newTheme)
-                    }
-                }
-            }
-            
-            // Units Preference
-            HStack {
-                Image(systemName: "ruler.fill")
-                    .foregroundColor(.orange)
-                    .frame(width: 20)
-                
-                Picker("Units", selection: $viewModel.selectedUnits) {
-                    ForEach(MeasurementUnit.allCases, id: \.self) { unit in
-                        Text(unit.displayText).tag(unit)
-                    }
-                }
-                .pickerStyle(.menu)
-                .onChange(of: viewModel.selectedUnits) { _, newUnits in
-                    Task {
-                        await viewModel.updateUnitsPreference(newUnits)
                     }
                 }
             }
@@ -228,22 +205,6 @@ struct ProfileView: View {
                 }
             }
             .disabled(viewModel.isExporting)
-            
-            // Upgrade to Account (for guest users)
-            if viewModel.currentUser?.authProvider == .guest {
-                HStack {
-                    Image(systemName: "person.badge.plus.fill")
-                        .foregroundColor(.blue)
-                        .frame(width: 20)
-                    
-                    Button("Create Account") {
-                        viewModel.showAuthenticationView = true
-                    }
-                    .foregroundColor(.blue)
-                    
-                    Spacer()
-                }
-            }
         }
     }
     
@@ -251,20 +212,46 @@ struct ProfileView: View {
     private var authenticationSection: some View {
         if let user = viewModel.currentUser {
             Section("Account") {
-                if user.authProvider == .guest {
-                    HStack {
-                        Image(systemName: "person.fill.questionmark")
-                            .foregroundColor(.orange)
-                            .frame(width: 20)
-                        
-                        Button("Sign In to Sync Data") {
-                            viewModel.showAuthenticationView = true
-                        }
-                        .foregroundColor(.blue)
-                        
-                        Spacer()
-                    }
-                } else {
+				if user.authProvider == .guest {
+					Button(action: { viewModel.showAuthenticationView = true }) {
+						HStack {
+							Image(systemName: "person.fill.questionmark")
+								.foregroundColor(.orange)
+								.frame(width: 20)
+							Text("Sign In or Create Account")
+								.foregroundColor(.blue)
+								.fontWeight(.semibold)
+							Spacer()
+						}
+					}
+					.buttonStyle(.plain)
+					.frame(maxWidth: .infinity, alignment: .leading)
+					.padding(.horizontal, 16)
+					.padding(.vertical, 10)
+					.listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+					.listRowBackground(
+						ZStack {
+							let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
+							shape.fill(Color(.secondarySystemGroupedBackground))
+							// Subtle base border
+							shape.strokeBorder(Color.accentColor.opacity(0.12), lineWidth: 1)
+
+							// Full-length gradient stroke with animated phase (sweeps around)
+                            shape.strokeBorder(
+                                ctaGradient(phase: gradientPhase, colorScheme: colorScheme),
+                                lineWidth: 3
+                            )
+							.animation(.linear(duration: 1.6).repeatCount(2, autoreverses: false), value: gradientPhase)
+						}
+						.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+					)
+					.onAppear {
+						gradientPhase = 0
+						DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+							gradientPhase = 1
+						}
+					}
+				} else {
                     HStack {
                         Image(systemName: "rectangle.portrait.and.arrow.right.fill")
                             .foregroundColor(.red)
@@ -313,6 +300,38 @@ struct ProfileView: View {
             }
         }
     }
+}
+
+// MARK: - Gradient Helpers
+private extension ProfileView {
+	func ctaGradient(phase: Double, colorScheme: ColorScheme) -> AngularGradient {
+		let stops: [Gradient.Stop]
+		if colorScheme == .dark {
+			// Richer, slightly more saturated sweep for dark mode
+			stops = [
+				.init(color: .cyan.opacity(0.70),   location: 0.00),
+				.init(color: .blue.opacity(0.90),   location: 0.20),
+				.init(color: .indigo,               location: 0.50),
+				.init(color: .purple.opacity(0.90), location: 0.80),
+				.init(color: .cyan.opacity(0.70),   location: 1.00)
+			]
+		} else {
+			// Softer, balanced sweep for light mode (avoids overpowering on light bg)
+			stops = [
+				.init(color: .blue.opacity(0.45),   location: 0.00),
+				.init(color: .teal.opacity(0.55),   location: 0.20),
+				.init(color: .indigo.opacity(0.70), location: 0.50),
+				.init(color: .purple.opacity(0.55), location: 0.80),
+				.init(color: .blue.opacity(0.45),   location: 1.00)
+			]
+		}
+		return AngularGradient(
+			gradient: Gradient(stops: stops),
+			center: .center,
+			startAngle: .degrees(phase * 360),
+			endAngle: .degrees(phase * 360 + 360)
+		)
+	}
 }
 
 // MARK: - Extensions for UI
