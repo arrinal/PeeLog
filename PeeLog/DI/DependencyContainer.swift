@@ -32,6 +32,10 @@ class DependencyContainer: ObservableObject {
     private var sharedSyncCoordinator: SyncCoordinator?
     private var migrationControllers: [ObjectIdentifier: MigrationController] = [:]
     private let syncControl = SyncControl()
+    private var analyticsRepository: AnalyticsRepository?
+    private var remoteAnalyticsService: RemoteAnalyticsService?
+    private var analyticsCache: AnalyticsCache = AnalyticsCache()
+    private let networkMonitor = NetworkMonitor.shared
     
     init() {
         // Initialize core services
@@ -42,6 +46,11 @@ class DependencyContainer: ObservableObject {
         // Initialize Firebase services
         self.firebaseAuthService = FirebaseAuthService()
         self.firestoreService = FirestoreService()
+        // Initialize Remote Analytics service
+        let analyticsConfig = RemoteAnalyticsService.Config(projectId: "peelog-d3e84")
+        self.remoteAnalyticsService = RemoteAnalyticsService(config: analyticsConfig)
+        // Start network monitoring
+        self.networkMonitor.start()
     }
     
     // MARK: - Repository Factory Methods
@@ -105,6 +114,15 @@ class DependencyContainer: ObservableObject {
     // MARK: - Cloud Services Accessors
     func getFirestoreService() -> FirestoreService { firestoreService }
     func getSyncControl() -> SyncControl { syncControl }
+    func getAnalyticsRepository() -> AnalyticsRepository {
+        if let repo = analyticsRepository { return repo }
+        let service = remoteAnalyticsService ?? RemoteAnalyticsService(config: .init(projectId: "peelog-d3e84"))
+        let repo = AnalyticsRepositoryImpl(service: service, cache: analyticsCache)
+        analyticsRepository = repo
+        return repo
+    }
+    
+    func getNetworkMonitor() -> NetworkMonitor { networkMonitor }
 
     // MARK: - Coordinators / Controllers
     func makeSyncCoordinator(modelContext: ModelContext) -> SyncCoordinator {
@@ -163,13 +181,14 @@ class DependencyContainer: ObservableObject {
     func makeStatisticsViewModel(modelContext: ModelContext) -> StatisticsViewModel {
         let repository = getPeeEventRepository(modelContext: modelContext)
         return StatisticsViewModel(
-            getAllEventsUseCase: GetAllPeeEventsUseCase(repository: repository),
+            getAllEventsUseCase: GetAllPeeEventsUseCase(repository: repository, userRepository: getUserRepository(modelContext: modelContext)),
             calculateStatisticsUseCase: CalculateBasicStatisticsUseCase(repository: repository),
             generateQualityTrendsUseCase: GenerateQualityTrendsUseCase(),
             generateHealthInsightsUseCase: GenerateHealthInsightsUseCase(repository: repository),
             analyzeHourlyPatternsUseCase: AnalyzeHourlyPatternsUseCase(),
             generateQualityDistributionUseCase: GenerateQualityDistributionUseCase(),
-            generateWeeklyDataUseCase: GenerateWeeklyDataUseCase(repository: repository)
+            generateWeeklyDataUseCase: GenerateWeeklyDataUseCase(repository: repository),
+            analyticsRepository: getAnalyticsRepository()
         )
     }
     

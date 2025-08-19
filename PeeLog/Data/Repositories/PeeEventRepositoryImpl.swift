@@ -33,6 +33,27 @@ class PeeEventRepositoryImpl: PeeEventRepository {
     func addEvent(_ event: PeeEvent) throws {
         modelContext.insert(event)
         try modelContext.save()
+        // Ensure the event is associated with the current local user for offline segregation
+        // If userId is empty and we can fetch a current user id, set it.
+        if event.userId == nil {
+            // Best-effort: load latest non-guest first, else guest
+            let userDescriptor = FetchDescriptor<User>(
+                predicate: #Predicate { $0.isGuest == false },
+                sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
+            )
+            if let user = try? modelContext.fetch(userDescriptor).first {
+                event.userId = user.id
+            } else {
+                let guestDescriptor = FetchDescriptor<User>(
+                    predicate: #Predicate { $0.isGuest == true },
+                    sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
+                )
+                if let guest = try? modelContext.fetch(guestDescriptor).first {
+                    event.userId = guest.id
+                }
+            }
+            try modelContext.save()
+        }
     }
     
     func deleteEvent(_ event: PeeEvent) throws {

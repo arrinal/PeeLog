@@ -137,29 +137,16 @@ struct ContentView: View {
             if isFirebaseAuthenticated {
                 // User is authenticated in Firebase, check for local user
                 if let user = await userRepository.getCurrentUser() {
-                    await MainActor.run {
-                        authState = .authenticated(user)
-                    }
+                    await MainActor.run { authState = .authenticated(user) }
                 } else {
                     // Create guest user as fallback if no local user found
                     await createGuestUser()
                 }
             } else {
-                // Not authenticated in Firebase
-                // Check if there's any local user (including guest)
+                // Offline or token invalid; prefer last known local user without demoting
                 if let user = await userRepository.getCurrentUser() {
-                    if user.isGuest {
-                        await MainActor.run {
-                            authState = .authenticated(user)
-                        }
-                    } else {
-                        // Non-guest user exists but not authenticated in Firebase
-                        // This means they signed out, so delete the stale user and create guest
-                        try? await userRepository.deleteUser(user)
-                        await createGuestUser()
-                    }
+                    await MainActor.run { authState = .authenticated(user) }
                 } else {
-                    // No user at all, create guest user
                     await createGuestUser()
                 }
             }
