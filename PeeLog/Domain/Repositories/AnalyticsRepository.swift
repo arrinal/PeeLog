@@ -1,0 +1,43 @@
+//
+//  AnalyticsRepository.swift
+//  PeeLog
+//
+//  Created by Assistant on 09/08/25.
+//
+
+import Foundation
+
+// MARK: - Remote Analytics Range (Domain)
+struct AnalyticsRange {
+    let period: TimePeriod
+    let startDate: Date?
+    let endDate: Date?
+    let timeZone: TimeZone?
+    
+    init(period: TimePeriod, startDate: Date? = nil, endDate: Date? = nil, timeZone: TimeZone? = nil) {
+        self.period = period
+        self.startDate = startDate
+        self.endDate = endDate
+        self.timeZone = timeZone
+    }
+}
+
+// MARK: - Analytics Repository Protocol
+@MainActor
+protocol AnalyticsRepository {
+    func fetchOverview(range: AnalyticsRange) async throws -> OverviewFromServer
+    func fetchQualityTrends(range: AnalyticsRange) async throws -> [QualityTrendPoint]
+    func fetchHourly(range: AnalyticsRange) async throws -> [HourlyData]
+    func fetchQualityDistribution(range: AnalyticsRange) async throws -> [QualityDistribution]
+    func fetchWeekly() async throws -> [WeeklyData]
+    func fetchInsights(range: AnalyticsRange) async throws -> [HealthInsight]
+}
+
+// MARK: - Overview DTO from server
+struct OverviewFromServer {
+    let stats: BasicStatistics
+    let interpretationLabel: String
+    let interpretationSeverity: String // positive|info|warning
+}
+
+
