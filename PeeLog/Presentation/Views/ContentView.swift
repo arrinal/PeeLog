@@ -16,6 +16,9 @@ struct ContentView: View {
     @State private var currentUser: User?
     @State private var cancellables = Set<AnyCancellable>()
     @State private var lastSyncedUserId: UUID?
+    @State private var showOnlineToast = false
+    @State private var wasOffline = false
+    @ObservedObject private var networkMonitor = NetworkMonitor.shared
     
     var body: some View {
         Group {
@@ -23,7 +26,10 @@ struct ContentView: View {
             case .checking:
                 loadingView
             case .authenticated(let user):
-                mainTabView
+                ZStack(alignment: .top) {
+                    mainTabView
+                    connectivityOverlay
+                }
                     .onAppear {
                         currentUser = user
                         Task { @MainActor in
@@ -41,6 +47,7 @@ struct ContentView: View {
         .task {
             await checkAuthenticationState()
             setupAuthStateObserver()
+            setupConnectivityObserver()
             NotificationCenter.default.addObserver(forName: .requestInitialFullSync, object: nil, queue: .main) { _ in
                 Task { @MainActor in
                     let sync = container.makeSyncCoordinator(modelContext: modelContext)
@@ -177,6 +184,39 @@ struct ContentView: View {
         if let user = user {
             UserDefaults.standard.set(user.preferences.theme.rawValue, forKey: "selectedTheme")
         }
+    }
+
+    // MARK: - Connectivity
+    private var connectivityOverlay: some View {
+        return VStack(spacing: 0) {
+            if !networkMonitor.isOnline {
+                ConnectivityToast(text: "You are offline", background: .red)
+            } else if showOnlineToast {
+                ConnectivityToast(text: "Back online", background: .green)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+            Spacer()
+        }
+        .animation(.easeInOut(duration: 0.2), value: networkMonitor.isOnline)
+        .animation(.easeInOut(duration: 0.2), value: showOnlineToast)
+    }
+    
+    private func setupConnectivityObserver() {
+        networkMonitor.$isOnline
+            .receive(on: DispatchQueue.main)
+            .sink { isOnline in
+                if !isOnline {
+                    wasOffline = true
+                    showOnlineToast = false
+                } else if wasOffline {
+                    wasOffline = false
+                    showOnlineToast = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                        showOnlineToast = false
+                    }
+                }
+            }
+            .store(in: &cancellables)
     }
 }
 
