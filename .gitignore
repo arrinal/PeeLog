@@ -1,0 +1,4 @@
+backend/*
+
+# Firebase configuration files
+**/GoogleService-Info.plist
