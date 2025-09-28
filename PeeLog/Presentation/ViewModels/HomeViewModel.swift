@@ -14,8 +14,10 @@ class HomeViewModel: ObservableObject {
     private let getTodaysPeeEventsUseCase: GetTodaysPeeEventsUseCase
     private let deleteEventUseCase: DeletePeeEventUseCase
     private let syncCoordinator: SyncCoordinator
+    private let networkMonitor = NetworkMonitor.shared
     
     @Published var todaysEvents: [PeeEvent] = []
+    private var didSetupObservers = false
     
     init(getTodaysPeeEventsUseCase: GetTodaysPeeEventsUseCase, deleteEventUseCase: DeletePeeEventUseCase, syncCoordinator: SyncCoordinator) {
         self.getTodaysPeeEventsUseCase = getTodaysPeeEventsUseCase
@@ -25,6 +27,15 @@ class HomeViewModel: ObservableObject {
     
     func loadTodaysEvents() {
         todaysEvents = getTodaysPeeEventsUseCase.execute()
+        if !didSetupObservers {
+            didSetupObservers = true
+            NotificationCenter.default.addObserver(forName: .eventsDidSync, object: nil, queue: .main) { [weak self] _ in
+                guard let self else { return }
+                Task { @MainActor in
+                    self.todaysEvents = self.getTodaysPeeEventsUseCase.execute()
+                }
+            }
+        }
     }
     
     func deleteEvent(at offsets: IndexSet) {
@@ -48,5 +59,12 @@ class HomeViewModel: ObservableObject {
             print("Error deleting event: \(error)")
         }
         loadTodaysEvents()
+    }
+
+    func refreshOnConnectivityChange(isOnline: Bool) {
+        Task { @MainActor in
+            // Always read from local store; ContentView handles syncing when online
+            todaysEvents = getTodaysPeeEventsUseCase.execute()
+        }
     }
 } 
