@@ -13,11 +13,15 @@ struct HomeView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dependencyContainer) private var container
-    @ObservedObject var viewModel: HomeViewModel
+    @StateObject private var viewModel: HomeViewModel
     @State private var showingAddEventSheet = false
     @State private var selectedEvent: PeeEvent?
     @State private var showingMapSheet = false
     @State private var mapPosition: MapCameraPosition = .automatic
+    
+    init(viewModel: HomeViewModel) {
+        _viewModel = StateObject(wrappedValue: viewModel)
+    }
     
     var body: some View {
         NavigationStack {
@@ -225,6 +229,7 @@ struct HomeView: View {
         }
         .onAppear {
             viewModel.loadTodaysEvents()
+            viewModel.refreshOnConnectivityChange(isOnline: NetworkMonitor.shared.isOnline)
         }
         .onReceive(NotificationCenter.default.publisher(for: .eventsDidSync)) { _ in
             // Ensure we hop to the main actor for UI-bound view model
@@ -233,6 +238,10 @@ struct HomeView: View {
                     viewModel.loadTodaysEvents()
                 }
             }
+        }
+        .onReceive(NetworkMonitor.shared.$isOnline) { isOnline in
+            // Immediately reload local list regardless of status to avoid empty flicker
+            viewModel.refreshOnConnectivityChange(isOnline: isOnline)
         }
     }
     
