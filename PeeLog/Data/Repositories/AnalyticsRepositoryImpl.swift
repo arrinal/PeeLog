@@ -8,11 +8,10 @@
 import Foundation
 @preconcurrency import FirebaseAuth
 
-@MainActor
 final class AnalyticsRepositoryImpl: AnalyticsRepository {
     private let service: RemoteAnalyticsService
     private let cache: AnalyticsCache
-    
+
     init(service: RemoteAnalyticsService, cache: AnalyticsCache = AnalyticsCache()) {
         self.service = service
         self.cache = cache
@@ -33,7 +32,7 @@ final class AnalyticsRepositoryImpl: AnalyticsRepository {
         return .init(period: p, startDate: range.startDate, endDate: range.endDate, timeZone: range.timeZone)
     }
     
-    func fetchOverview(range: AnalyticsRange) async throws -> OverviewFromServer {
+    func fetchOverview(range: AnalyticsRange) async throws -> Sourced<OverviewFromServer> {
         let pr = toPeriodRange(range)
         let uid = await AuthHelper.currentUid() ?? "guest"
         do {
@@ -45,11 +44,12 @@ final class AnalyticsRepositoryImpl: AnalyticsRepository {
                 averageDaily: resp.averageDaily,
                 healthScore: resp.healthScore
             )
-            return OverviewFromServer(
+            let dto = OverviewFromServer(
                 stats: stats,
                 interpretationLabel: resp.healthScoreInterpretation.label,
                 interpretationSeverity: resp.healthScoreInterpretation.severity
             )
+            return Sourced(data: dto, source: .remote)
         } catch {
             if let cached = try await cache.loadOverview(uid: uid, period: pr.period, startISO: pr.startDate, endISO: pr.endDate, tz: pr.timeZone) {
                 let stats = BasicStatistics(
@@ -58,47 +58,52 @@ final class AnalyticsRepositoryImpl: AnalyticsRepository {
                     averageDaily: cached.averageDaily,
                     healthScore: cached.healthScore
                 )
-                return OverviewFromServer(
+                let dto = OverviewFromServer(
                     stats: stats,
                     interpretationLabel: cached.healthScoreInterpretation.label,
                     interpretationSeverity: cached.healthScoreInterpretation.severity
                 )
+                return Sourced(data: dto, source: .cache)
             }
             throw error
         }
     }
     
-    func fetchQualityTrends(range: AnalyticsRange) async throws -> [QualityTrendPoint] {
+    func fetchQualityTrends(range: AnalyticsRange) async throws -> Sourced<[QualityTrendPoint]> {
         let pr = toPeriodRange(range)
         let uid = await AuthHelper.currentUid() ?? "guest"
         do {
             let resp = try await service.fetchQualityTrends(range: pr)
             try await cache.saveQualityTrends(uid: uid, period: pr.period, startISO: pr.startDate, endISO: pr.endDate, tz: pr.timeZone, response: resp)
-            return resp.map { .init(date: ISO8601DateFormatter().date(from: $0.date) ?? Date(), averageQuality: $0.averageQuality) }
+            let data = resp.map { QualityTrendPoint(date: ISO8601DateFormatter().date(from: $0.date) ?? Date(), averageQuality: $0.averageQuality) }
+            return Sourced(data: data, source: .remote)
         } catch {
             if let cached = try await cache.loadQualityTrends(uid: uid, period: pr.period, startISO: pr.startDate, endISO: pr.endDate, tz: pr.timeZone) {
-                return cached.map { .init(date: ISO8601DateFormatter().date(from: $0.date) ?? Date(), averageQuality: $0.averageQuality) }
+                let data = cached.map { QualityTrendPoint(date: ISO8601DateFormatter().date(from: $0.date) ?? Date(), averageQuality: $0.averageQuality) }
+                return Sourced(data: data, source: .cache)
             }
             throw error
         }
     }
     
-    func fetchHourly(range: AnalyticsRange) async throws -> [HourlyData] {
+    func fetchHourly(range: AnalyticsRange) async throws -> Sourced<[HourlyData]> {
         let pr = toPeriodRange(range)
         let uid = await AuthHelper.currentUid() ?? "guest"
         do {
             let resp = try await service.fetchHourly(range: pr)
             try await cache.saveHourly(uid: uid, period: pr.period, startISO: pr.startDate, endISO: pr.endDate, tz: pr.timeZone, response: resp)
-            return resp.map { .init(hour: $0.hour, count: $0.count) }
+            let data = resp.map { HourlyData(hour: $0.hour, count: $0.count) }
+            return Sourced(data: data, source: .remote)
         } catch {
             if let cached = try await cache.loadHourly(uid: uid, period: pr.period, startISO: pr.startDate, endISO: pr.endDate, tz: pr.timeZone) {
-                return cached.map { .init(hour: $0.hour, count: $0.count) }
+                let data = cached.map { HourlyData(hour: $0.hour, count: $0.count) }
+                return Sourced(data: data, source: .cache)
             }
             throw error
         }
     }
     
-    func fetchQualityDistribution(range: AnalyticsRange) async throws -> [QualityDistribution] {
+    func fetchQualityDistribution(range: AnalyticsRange) async throws -> Sourced<[QualityDistribution]> {
         let pr = toPeriodRange(range)
         let uid = await AuthHelper.currentUid() ?? "guest"
         func map(_ list: [RemoteAnalyticsService.QualityDistributionResponse]) -> [QualityDistribution] {
@@ -118,30 +123,34 @@ final class AnalyticsRepositoryImpl: AnalyticsRepository {
         do {
             let resp = try await service.fetchQualityDistribution(range: pr)
             try await cache.saveQualityDistribution(uid: uid, period: pr.period, startISO: pr.startDate, endISO: pr.endDate, tz: pr.timeZone, response: resp)
-            return map(resp)
+            let data = map(resp)
+            return Sourced(data: data, source: .remote)
         } catch {
             if let cached = try await cache.loadQualityDistribution(uid: uid, period: pr.period, startISO: pr.startDate, endISO: pr.endDate, tz: pr.timeZone) {
-                return map(cached)
+                let data = map(cached)
+                return Sourced(data: data, source: .cache)
             }
             throw error
         }
     }
     
-    func fetchWeekly() async throws -> [WeeklyData] {
+    func fetchWeekly() async throws -> Sourced<[WeeklyData]> {
         let uid = await AuthHelper.currentUid() ?? "guest"
         do {
             let resp = try await service.fetchWeekly()
             try await cache.saveWeekly(uid: uid, response: resp)
-            return resp.map { .init(dayOfWeek: $0.dayOfWeek, dayName: $0.dayName, count: $0.count, averageQuality: $0.averageQuality, severity: $0.severity) }
+            let data = resp.map { WeeklyData(dayOfWeek: $0.dayOfWeek, dayName: $0.dayName, count: $0.count, averageQuality: $0.averageQuality, severity: $0.severity) }
+            return Sourced(data: data, source: .remote)
         } catch {
             if let cached = try await cache.loadWeekly(uid: uid) {
-                return cached.map { .init(dayOfWeek: $0.dayOfWeek, dayName: $0.dayName, count: $0.count, averageQuality: $0.averageQuality, severity: $0.severity) }
+                let data = cached.map { WeeklyData(dayOfWeek: $0.dayOfWeek, dayName: $0.dayName, count: $0.count, averageQuality: $0.averageQuality, severity: $0.severity) }
+                return Sourced(data: data, source: .cache)
             }
             throw error
         }
     }
     
-    func fetchInsights(range: AnalyticsRange) async throws -> [HealthInsight] {
+    func fetchInsights(range: AnalyticsRange) async throws -> Sourced<[HealthInsight]> {
         let pr = toPeriodRange(range)
         let uid = await AuthHelper.currentUid() ?? "guest"
         func map(_ items: [RemoteAnalyticsService.Insight]) -> [HealthInsight] {
@@ -159,10 +168,12 @@ final class AnalyticsRepositoryImpl: AnalyticsRepository {
         do {
             let items = try await service.fetchInsights(range: pr)
             try await cache.saveInsights(uid: uid, period: pr.period, startISO: pr.startDate, endISO: pr.endDate, tz: pr.timeZone, response: items)
-            return map(items)
+            let data = map(items)
+            return Sourced(data: data, source: .remote)
         } catch {
             if let cached = try await cache.loadInsights(uid: uid, period: pr.period, startISO: pr.startDate, endISO: pr.endDate, tz: pr.timeZone) {
-                return map(cached)
+                let data = map(cached)
+                return Sourced(data: data, source: .cache)
             }
             throw error
         }

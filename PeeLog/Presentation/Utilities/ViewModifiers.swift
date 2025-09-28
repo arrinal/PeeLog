@@ -217,7 +217,10 @@ struct BadgeStyle: ViewModifier {
             .background(
                 Capsule()
                     .fill(backgroundColor)
+                    .shadow(color: backgroundColor.opacity(0.25), radius: 4, x: 0, y: 2)
             )
+            .accessibilityLabel("Status badge")
+            .accessibilityHint("Indicates the data source status for this section")
     }
 }
 
@@ -301,6 +304,7 @@ extension View {
             size: size,
             weight: weight
         ))
+        .transition(.opacity.combined(with: .scale(scale: 0.95)))
     }
     
     // Quality badge - specific to PeeLog

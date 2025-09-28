@@ -28,7 +28,7 @@ class GenerateQualityDistributionUseCase {
 }
 
 // Data structure for quality distribution
-struct QualityDistribution: Identifiable {
+struct QualityDistribution: Identifiable, Sendable {
     let id = UUID()
     let quality: PeeQuality
     let count: Int

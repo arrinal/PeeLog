@@ -19,6 +19,8 @@ struct ContentView: View {
     @State private var showOnlineToast = false
     @State private var wasOffline = false
     @ObservedObject private var networkMonitor = NetworkMonitor.shared
+    @State private var serverToastMessage: String? = nil
+    @State private var lastServerToastAt: Date = .distantPast
     
     var body: some View {
         Group {
@@ -52,6 +54,19 @@ struct ContentView: View {
                 Task { @MainActor in
                     let sync = container.makeSyncCoordinator(modelContext: modelContext)
                     try? await sync.initialFullSync()
+                }
+            }
+            NotificationCenter.default.addObserver(forName: .serverStatusToast, object: nil, queue: .main) { note in
+                guard let msg = note.userInfo?["message"] as? String else { return }
+                Task { @MainActor in
+                    // rate-limit to 3s between toasts
+                    let now = Date()
+                    if now.timeIntervalSince(lastServerToastAt) > 3 {
+                        lastServerToastAt = now
+                        serverToastMessage = msg
+                        try? await Task.sleep(nanoseconds: 2_000_000_000)
+                        serverToastMessage = nil
+                    }
                 }
             }
         }
@@ -194,11 +209,15 @@ struct ContentView: View {
             } else if showOnlineToast {
                 ConnectivityToast(text: "Back online", background: .green)
                     .transition(.move(edge: .top).combined(with: .opacity))
+            } else if let serverToastMessage {
+                ConnectivityToast(text: serverToastMessage, background: .orange)
+                    .transition(.move(edge: .top).combined(with: .opacity))
             }
             Spacer()
         }
         .animation(.easeInOut(duration: 0.2), value: networkMonitor.isOnline)
         .animation(.easeInOut(duration: 0.2), value: showOnlineToast)
+        .animation(.easeInOut(duration: 0.2), value: serverToastMessage)
     }
     
     private func setupConnectivityObserver() {
@@ -211,6 +230,16 @@ struct ContentView: View {
                 } else if wasOffline {
                     wasOffline = false
                     showOnlineToast = true
+                    // Trigger incremental sync and statistics refresh when back online
+                    Task { @MainActor in
+                        let sync = container.makeSyncCoordinator(modelContext: modelContext)
+                        if let last = container.getSyncControl().lastSuccessfulSyncAt {
+                            try? await sync.incrementalSync(since: last)
+                        } else {
+                            try? await sync.initialFullSync()
+                        }
+                        container.getSyncControl().lastSuccessfulSyncAt = Date()
+                    }
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                         showOnlineToast = false
                     }

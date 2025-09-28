@@ -25,21 +25,24 @@ final class SyncCoordinator {
     // MARK: - Initial full sync
     func initialFullSync() async throws {
         guard let uid = Auth.auth().currentUser?.uid else { return }
-        if syncControl.isBlocked {
-            return
-        }
+        if syncControl.isBlocked { return }
+        syncControl.isBlocked = true
+        defer { syncControl.isBlocked = false }
         
         // Pull cloud snapshot and replace local
         let events = try await firestoreService.fetchAllEvents(uid: uid)
         try peeEventRepository.clearAllEvents()
         try peeEventRepository.addEvents(events)
         NotificationCenter.default.post(name: .eventsDidSync, object: nil)
+        syncControl.lastSuccessfulSyncAt = Date()
     }
     
     // MARK: - Incremental sync
     func incrementalSync(since: Date) async throws {
         guard let uid = Auth.auth().currentUser?.uid else { return }
         if syncControl.isBlocked { return }
+        syncControl.isBlocked = true
+        defer { syncControl.isBlocked = false }
         let user = await userRepository.getCurrentUser()
         guard let user = user, !user.isGuest else { return }
         
@@ -50,10 +53,11 @@ final class SyncCoordinator {
         // Download remote changes since timestamp
         let remoteChanges = try await firestoreService.fetchEventsSince(uid: uid, since: since)
         if !remoteChanges.isEmpty {
-            // Simplest merge: overwrite local by re-adding (idempotent via same UUIDs)
+            // Upsert by UUID; PeeEventRepositoryImpl.addEvents handles de-duplication
             try peeEventRepository.addEvents(remoteChanges)
             NotificationCenter.default.post(name: .eventsDidSync, object: nil)
         }
+        syncControl.lastSuccessfulSyncAt = Date()
     }
     
     // MARK: - Logout sync

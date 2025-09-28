@@ -12,7 +12,12 @@ import Charts
 @MainActor
 struct StatisticsView: View {
     @Environment(\.modelContext) private var modelContext
-    @ObservedObject var viewModel: StatisticsViewModel
+    @Environment(\.scenePhase) private var scenePhase
+    @StateObject private var viewModel: StatisticsViewModel
+
+    init(viewModel: StatisticsViewModel) {
+        _viewModel = StateObject(wrappedValue: viewModel)
+    }
     
     var body: some View {
         NavigationStack {
@@ -34,7 +39,27 @@ struct StatisticsView: View {
             }
         }
         .onAppear {
-            viewModel.loadStatistics()
+            if NetworkMonitor.shared.isOnline {
+                viewModel.loadStatistics()
+            } else {
+                Task { await viewModel.refreshOfflineImmediate() }
+            }
+        }
+        .onReceive(NetworkMonitor.shared.$isOnline) { isOnline in
+            if isOnline && viewModel.useRemoteRefreshAllowed {
+                viewModel.loadStatistics()
+            } else if !isOnline {
+                Task { await viewModel.refreshOfflineImmediate() }
+            }
+        }
+        .onChange(of: scenePhase) { newPhase in
+            if newPhase == .active {
+                if NetworkMonitor.shared.isOnline {
+                    viewModel.refreshOnForegroundIfStale()
+                } else {
+                    Task { await viewModel.refreshOfflineImmediate() }
+                }
+            }
         }
         .sheet(isPresented: $viewModel.showingQualityTrendsCustomDatePicker) {
             CustomDateRangeSheet(
@@ -82,38 +107,42 @@ struct StatisticsView: View {
                 GridItem(.flexible()),
                 GridItem(.flexible())
             ], spacing: 16) {
-                StatisticCard(
-                    title: "Total Events",
-                    value: "\(viewModel.totalEvents)",
-                    subtitle: "All time",
-                    color: .blue,
-                    icon: "drop.circle.fill"
-                )
-                
-                StatisticCard(
-                    title: "This Week",
-                    value: "\(viewModel.thisWeekEvents)",
-                    subtitle: "Last 7 days",
-                    color: .green,
-                    icon: "calendar.circle.fill"
-                )
-                
-                StatisticCard(
-                    title: "Average Daily",
-                    value: String(format: "%.1f", viewModel.averageDaily),
-                    subtitle: "Events per day",
-                    color: .orange,
-                    icon: "chart.line.uptrend.xyaxis.circle.fill"
-                )
-                
-                StatisticCard(
-                    title: "Health Score",
-                    value: "\(Int(viewModel.healthScore * 100))%",
-                    subtitle: "Hydration level",
-                    color: viewModel.healthScore > 0.7 ? .green : viewModel.healthScore > 0.4 ? .orange : .red,
-                    icon: "heart.circle.fill",
-                    interpretation: viewModel.healthScoreInterpretation
-                )
+                if viewModel.isLoadingOverview {
+                    OverviewShimmerGrid()
+                } else {
+                    StatisticCard(
+                        title: "Total Events",
+                        value: "\(viewModel.totalEvents)",
+                        subtitle: "All time",
+                        color: .blue,
+                        icon: "drop.circle.fill"
+                    )
+                    
+                    StatisticCard(
+                        title: "This Week",
+                        value: "\(viewModel.thisWeekEvents)",
+                        subtitle: "Last 7 days",
+                        color: .green,
+                        icon: "calendar.circle.fill"
+                    )
+                    
+                    StatisticCard(
+                        title: "Average Daily",
+                        value: String(format: "%.1f", viewModel.averageDaily),
+                        subtitle: "Events per day",
+                        color: .orange,
+                        icon: "chart.line.uptrend.xyaxis.circle.fill"
+                    )
+                    
+                    StatisticCard(
+                        title: "Health Score",
+                        value: "\(Int(viewModel.healthScore * 100))%",
+                        subtitle: "Hydration level",
+                        color: viewModel.healthScore > 0.7 ? .green : viewModel.healthScore > 0.4 ? .orange : .red,
+                        icon: "heart.circle.fill",
+                        interpretation: viewModel.healthScoreInterpretation
+                    )
+                }
             }
         }
     }
@@ -124,6 +153,11 @@ struct StatisticsView: View {
                 Text("Quality Trends")
                     .font(.title2)
                     .fontWeight(.bold)
+                if viewModel.trendsSource != .remote {
+                    Text(viewModel.trendsSource == .cache ? "Cached" : "Local")
+                        .font(.caption)
+                        .badgeStyle(backgroundColor: viewModel.trendsSource == .cache ? .blue : .orange)
+                }
                 Spacer()
                 Menu {
                     Button("Last 7 Days") { viewModel.qualityTrendsPeriod = .week }
@@ -149,7 +183,12 @@ struct StatisticsView: View {
                 .foregroundColor(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
             
-            if !viewModel.qualityTrendData.isEmpty {
+            if viewModel.isLoadingTrends {
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(Color(.systemGray6))
+                    .frame(height: 200)
+                    .shimmering()
+            } else if !viewModel.qualityTrendData.isEmpty {
                 Chart(viewModel.qualityTrendData) { dataPoint in
                     LineMark(
                         x: .value("Date", dataPoint.date),
@@ -176,6 +215,11 @@ struct StatisticsView: View {
                 Text("Daily Patterns")
                     .font(.title2)
                     .fontWeight(.bold)
+                if viewModel.hourlySource != .remote {
+                    Text(viewModel.hourlySource == .cache ? "Cached" : "Local")
+                        .font(.caption)
+                        .badgeStyle(backgroundColor: viewModel.hourlySource == .cache ? .blue : .orange)
+                }
                 Spacer()
                 Menu {
                     Button("Last 7 Days") { viewModel.dailyPatternsPeriod = .week }
@@ -201,7 +245,12 @@ struct StatisticsView: View {
                 .foregroundColor(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
             
-            if !viewModel.hourlyData.isEmpty {
+            if viewModel.isLoadingHourly {
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(Color(.systemGray6))
+                    .frame(height: 150)
+                    .shimmering()
+            } else if !viewModel.hourlyData.isEmpty {
                 Chart(viewModel.hourlyData) { dataPoint in
                     BarMark(
                         x: .value("Hour", dataPoint.hour),
@@ -227,6 +276,11 @@ struct StatisticsView: View {
                 Text("Quality Distribution")
                     .font(.title2)
                     .fontWeight(.bold)
+                if viewModel.distributionSource != .remote {
+                    Text(viewModel.distributionSource == .cache ? "Cached" : "Local")
+                        .font(.caption)
+                        .badgeStyle(backgroundColor: viewModel.distributionSource == .cache ? .blue : .orange)
+                }
                 Spacer()
                 Menu {
                     Button("Last 7 Days") { viewModel.qualityDistributionPeriod = .week }
@@ -252,7 +306,35 @@ struct StatisticsView: View {
                 .foregroundColor(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
             
-            if !viewModel.qualityDistribution.isEmpty {
+            if viewModel.isLoadingDistribution {
+                VStack(spacing: 12) {
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(Color(.systemGray6))
+                        .frame(height: 200)
+                        .shimmering()
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                        ForEach(0..<4, id: \.self) { _ in
+                            HStack(spacing: 8) {
+                                Circle()
+                                    .fill(Color(.systemGray5))
+                                    .frame(width: 12, height: 12)
+                                    .shimmering()
+                                VStack(alignment: .leading, spacing: 2) {
+                                    RoundedRectangle(cornerRadius: 4)
+                                        .fill(Color(.systemGray5))
+                                        .frame(width: 80, height: 10)
+                                        .shimmering()
+                                    RoundedRectangle(cornerRadius: 4)
+                                        .fill(Color(.systemGray5))
+                                        .frame(width: 60, height: 8)
+                                        .shimmering()
+                                }
+                                Spacer()
+                            }
+                        }
+                    }
+                }
+            } else if !viewModel.qualityDistribution.isEmpty {
                 Chart(viewModel.qualityDistribution) { dataPoint in
                     SectorMark(
                         angle: .value("Count", dataPoint.count),
@@ -303,33 +385,56 @@ struct StatisticsView: View {
                 .font(.title2)
                 .fontWeight(.bold)
                 .frame(maxWidth: .infinity, alignment: .leading)
+            if viewModel.weeklySource != .remote {
+                Text(viewModel.weeklySource == .cache ? "Cached" : "Local")
+                    .font(.caption)
+                    .badgeStyle(backgroundColor: viewModel.weeklySource == .cache ? .blue : .orange)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
             
             Text("Your weekly activity at a glance. Each day shows the number of events and average quality, helping you spot patterns across the week.")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
             
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 7), spacing: 8) {
-                ForEach(viewModel.weeklyData, id: \.dayOfWeek) { dayData in
-                    VStack(spacing: 8) {
-                        Text(dayData.dayName)
-                            .font(.caption)
-                            .fontWeight(.medium)
-                            .foregroundColor(.secondary)
-                        
-                        ZStack {
+            if viewModel.isLoadingWeekly {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 7), spacing: 8) {
+                    ForEach(0..<7, id: \.self) { _ in
+                        VStack(spacing: 8) {
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(Color(.systemGray5))
+                                .frame(height: 10)
+                                .shimmering()
                             Circle()
-                                .fill(Color(.systemGray6))
+                                .fill(Color(.systemGray5))
                                 .frame(width: 40, height: 40)
-                            
-                            Circle()
-                                .fill(dayData.qualityColor)
-                                .frame(width: 32, height: 32)
-                            
-                            Text("\(dayData.count)")
+                                .shimmering()
+                        }
+                    }
+                }
+            } else {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 7), spacing: 8) {
+                    ForEach(viewModel.weeklyData, id: \.dayOfWeek) { dayData in
+                        VStack(spacing: 8) {
+                            Text(dayData.dayName)
                                 .font(.caption)
-                                .fontWeight(.bold)
-                                .foregroundColor(.white)
+                                .fontWeight(.medium)
+                                .foregroundColor(.secondary)
+                            
+                            ZStack {
+                                Circle()
+                                    .fill(Color(.systemGray6))
+                                    .frame(width: 40, height: 40)
+                                
+                                Circle()
+                                    .fill(dayData.qualityColor)
+                                    .frame(width: 32, height: 32)
+                                
+                                Text("\(dayData.count)")
+                                    .font(.caption)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(.white)
+                            }
                         }
                     }
                 }
@@ -404,15 +509,30 @@ struct StatisticsView: View {
                 .font(.title2)
                 .fontWeight(.bold)
                 .frame(maxWidth: .infinity, alignment: .leading)
+            if viewModel.insightsSource != .remote {
+                Text(viewModel.insightsSource == .cache ? "Cached" : "Local")
+                    .font(.caption)
+                    .badgeStyle(backgroundColor: viewModel.insightsSource == .cache ? .blue : .orange)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
             
-            if !viewModel.healthInsights.isEmpty {
+            if viewModel.isLoadingInsights {
+                VStack(spacing: 12) {
+                    ForEach(0..<3, id: \.self) { _ in
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color(.systemGray6))
+                            .frame(height: 48)
+                            .shimmering()
+                    }
+                }
+            } else if !viewModel.healthInsights.isEmpty {
                 VStack(spacing: 12) {
                     ForEach(viewModel.healthInsights, id: \.title) { insight in
                         HealthInsightCard(insight: insight)
                     }
                 }
             } else {
-                Text("Loading insights...")
+                Text("No insights yet for this range")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
                     .frame(maxWidth: .infinity)
@@ -494,6 +614,55 @@ struct StatisticCard: View {
             RoundedRectangle(cornerRadius: 16)
                 .stroke(color.opacity(0.3), lineWidth: 1)
         )
+    }
+}
+
+// MARK: - Shimmers
+private struct OverviewShimmerGrid: View {
+    var body: some View {
+        Group {
+            ShimmerCard()
+            ShimmerCard()
+            ShimmerCard()
+            ShimmerCard()
+        }
+    }
+}
+
+private struct ShimmerCard: View {
+    var body: some View {
+        VStack(spacing: 12) {
+            HStack {
+                Circle()
+                    .fill(Color(.systemGray5))
+                    .frame(width: 20, height: 20)
+                    .shimmering()
+                Spacer()
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(Color(.systemGray5))
+                    .frame(height: 12)
+                    .frame(width: 60)
+                    .shimmering()
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(Color(.systemGray5))
+                    .frame(height: 24)
+                    .shimmering()
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(Color(.systemGray5))
+                    .frame(height: 12)
+                    .shimmering()
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(Color(.systemGray5))
+                    .frame(height: 10)
+                    .frame(maxWidth: 120)
+                    .shimmering()
+            }
+        }
+        .padding()
+        .background(Color(.systemGray6))
+        .cornerRadius(16)
     }
 }
 
