@@ -59,6 +59,16 @@ struct ContentView: View {
             NotificationCenter.default.addObserver(forName: .serverStatusToast, object: nil, queue: .main) { note in
                 guard let msg = note.userInfo?["message"] as? String else { return }
                 Task { @MainActor in
+                    // Do not show server toasts for guest users
+                    if let user = self.currentUser, user.isGuest {
+                        return
+                    }
+                    if self.currentUser == nil {
+                        let userRepository = container.makeUserRepository(modelContext: modelContext)
+                        let user = await userRepository.getCurrentUser()
+                        if let user, user.isGuest { return }
+                        self.currentUser = user
+                    }
                     // rate-limit to 3s between toasts
                     let now = Date()
                     if now.timeIntervalSince(lastServerToastAt) > 3 {

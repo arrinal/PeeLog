@@ -391,6 +391,8 @@ final class ProfileViewModel: ObservableObject {
         do {
             // Sync all data (events + profile) before sign out
             try? await syncCoordinator.syncBeforeLogout()
+            // Notify views that event store will reset; they should drop references
+            NotificationCenter.default.post(name: .eventsStoreWillReset, object: nil)
             
             // Sign out from Firebase
             try await authenticateUserUseCase.signOut()
@@ -418,6 +420,8 @@ final class ProfileViewModel: ObservableObject {
             
             // Clear all local events as part of logout transition
             do { try peeEventRepository.clearAllEvents() } catch { /* no-op */ }
+            // Notify that store reset completed so views can re-query safely
+            NotificationCenter.default.post(name: .eventsStoreDidReset, object: nil)
 
             // Create a fresh guest user
             let guestUser = try await userRepository.createGuestUser()

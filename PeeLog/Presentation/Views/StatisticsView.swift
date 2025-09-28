@@ -45,6 +45,29 @@ struct StatisticsView: View {
                 Task { await viewModel.refreshOfflineImmediate() }
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .eventsStoreWillReset)) { _ in
+            Task { @MainActor in
+                // Clear charts and counters to avoid using detached objects
+                viewModel.totalEvents = 0
+                viewModel.thisWeekEvents = 0
+                viewModel.averageDaily = 0
+                viewModel.healthScore = 0
+                viewModel.qualityTrendData = []
+                viewModel.hourlyData = []
+                viewModel.qualityDistribution = []
+                viewModel.weeklyData = []
+                viewModel.healthInsights = []
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .eventsStoreDidReset)) { _ in
+            Task { @MainActor in
+                if NetworkMonitor.shared.isOnline {
+                    viewModel.loadStatistics()
+                } else {
+                    await viewModel.refreshOfflineImmediate()
+                }
+            }
+        }
         .onReceive(NetworkMonitor.shared.$isOnline) { isOnline in
             if isOnline && viewModel.useRemoteRefreshAllowed {
                 viewModel.loadStatistics()
@@ -153,11 +176,6 @@ struct StatisticsView: View {
                 Text("Quality Trends")
                     .font(.title2)
                     .fontWeight(.bold)
-                if viewModel.trendsSource != .remote {
-                    Text(viewModel.trendsSource == .cache ? "Cached" : "Local")
-                        .font(.caption)
-                        .badgeStyle(backgroundColor: viewModel.trendsSource == .cache ? .blue : .orange)
-                }
                 Spacer()
                 Menu {
                     Button("Last 7 Days") { viewModel.qualityTrendsPeriod = .week }
@@ -215,11 +233,6 @@ struct StatisticsView: View {
                 Text("Daily Patterns")
                     .font(.title2)
                     .fontWeight(.bold)
-                if viewModel.hourlySource != .remote {
-                    Text(viewModel.hourlySource == .cache ? "Cached" : "Local")
-                        .font(.caption)
-                        .badgeStyle(backgroundColor: viewModel.hourlySource == .cache ? .blue : .orange)
-                }
                 Spacer()
                 Menu {
                     Button("Last 7 Days") { viewModel.dailyPatternsPeriod = .week }
@@ -276,11 +289,6 @@ struct StatisticsView: View {
                 Text("Quality Distribution")
                     .font(.title2)
                     .fontWeight(.bold)
-                if viewModel.distributionSource != .remote {
-                    Text(viewModel.distributionSource == .cache ? "Cached" : "Local")
-                        .font(.caption)
-                        .badgeStyle(backgroundColor: viewModel.distributionSource == .cache ? .blue : .orange)
-                }
                 Spacer()
                 Menu {
                     Button("Last 7 Days") { viewModel.qualityDistributionPeriod = .week }
@@ -385,12 +393,6 @@ struct StatisticsView: View {
                 .font(.title2)
                 .fontWeight(.bold)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            if viewModel.weeklySource != .remote {
-                Text(viewModel.weeklySource == .cache ? "Cached" : "Local")
-                    .font(.caption)
-                    .badgeStyle(backgroundColor: viewModel.weeklySource == .cache ? .blue : .orange)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
             
             Text("Your weekly activity at a glance. Each day shows the number of events and average quality, helping you spot patterns across the week.")
                 .font(.subheadline)
@@ -509,12 +511,6 @@ struct StatisticsView: View {
                 .font(.title2)
                 .fontWeight(.bold)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            if viewModel.insightsSource != .remote {
-                Text(viewModel.insightsSource == .cache ? "Cached" : "Local")
-                    .font(.caption)
-                    .badgeStyle(backgroundColor: viewModel.insightsSource == .cache ? .blue : .orange)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
             
             if viewModel.isLoadingInsights {
                 VStack(spacing: 12) {

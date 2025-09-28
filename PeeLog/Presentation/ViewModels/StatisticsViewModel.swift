@@ -82,6 +82,7 @@ final class StatisticsViewModel: ObservableObject {
     private var basicStatistics: BasicStatistics?
     private var lastAnalyticsRefreshAt: Date?
     private let foregroundRefreshThresholdSeconds: TimeInterval = 60 * 30
+    private var observersInstalled = false
     
     // MARK: - Initializer
     init(
@@ -103,6 +104,30 @@ final class StatisticsViewModel: ObservableObject {
         self.generateWeeklyDataUseCase = generateWeeklyDataUseCase
         self.analyticsRepository = analyticsRepository
         setupDebounce()
+        installStoreResetObserversIfNeeded()
+    }
+
+    private func installStoreResetObserversIfNeeded() {
+        guard !observersInstalled else { return }
+        observersInstalled = true
+        NotificationCenter.default.addObserver(forName: .eventsStoreWillReset, object: nil, queue: .main) { [weak self] _ in
+            guard let self else { return }
+            self.totalEvents = 0
+            self.thisWeekEvents = 0
+            self.averageDaily = 0
+            self.healthScore = 0
+            self.qualityTrendData = []
+            self.hourlyData = []
+            self.qualityDistribution = []
+            self.weeklyData = []
+            self.healthInsights = []
+            self.allEvents = []
+            self.basicStatistics = nil
+        }
+        NotificationCenter.default.addObserver(forName: .eventsStoreDidReset, object: nil, queue: .main) { [weak self] _ in
+            guard let self else { return }
+            self.loadStatistics()
+        }
     }
     
     var healthScoreInterpretation: String {
