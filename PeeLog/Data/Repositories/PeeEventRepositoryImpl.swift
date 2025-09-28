@@ -69,7 +69,23 @@ class PeeEventRepositoryImpl: PeeEventRepository {
     }
 
     func addEvents(_ events: [PeeEvent]) throws {
-        for e in events { modelContext.insert(e) }
+        for incoming in events {
+            // Upsert by stable UUID to avoid duplicates
+            let fetchAll = try? modelContext.fetch(FetchDescriptor<PeeEvent>())
+            let existing = fetchAll?.first(where: { $0.id == incoming.id })
+            if let current = existing {
+                current.timestamp = incoming.timestamp
+                current.notes = incoming.notes
+                current.quality = incoming.quality
+                current.latitude = incoming.latitude
+                current.longitude = incoming.longitude
+                current.locationName = incoming.locationName
+                // Preserve current.userId if already set; otherwise carry over
+                if current.userId == nil { current.userId = incoming.userId }
+            } else {
+                modelContext.insert(incoming)
+            }
+        }
         try modelContext.save()
     }
 } 

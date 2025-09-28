@@ -76,7 +76,7 @@ class GenerateQualityTrendsUseCase {
 // Using shared TimePeriod enum from Domain/Entities/TimePeriod.swift
 
 // Data structure for quality trend points
-struct QualityTrendPoint: Identifiable {
+struct QualityTrendPoint: Identifiable, Sendable {
     let id = UUID()
     let date: Date
     let averageQuality: Double

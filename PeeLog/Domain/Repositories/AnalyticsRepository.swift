@@ -22,15 +22,14 @@ struct AnalyticsRange {
     }
 }
 
-// MARK: - Analytics Repository Protocol
-@MainActor
-protocol AnalyticsRepository {
-    func fetchOverview(range: AnalyticsRange) async throws -> OverviewFromServer
-    func fetchQualityTrends(range: AnalyticsRange) async throws -> [QualityTrendPoint]
-    func fetchHourly(range: AnalyticsRange) async throws -> [HourlyData]
-    func fetchQualityDistribution(range: AnalyticsRange) async throws -> [QualityDistribution]
-    func fetchWeekly() async throws -> [WeeklyData]
-    func fetchInsights(range: AnalyticsRange) async throws -> [HealthInsight]
+// MARK: - Analytics Repository Protocol (Sendable, non-main-actor)
+protocol AnalyticsRepository: AnyObject, Sendable {
+    func fetchOverview(range: AnalyticsRange) async throws -> Sourced<OverviewFromServer>
+    func fetchQualityTrends(range: AnalyticsRange) async throws -> Sourced<[QualityTrendPoint]>
+    func fetchHourly(range: AnalyticsRange) async throws -> Sourced<[HourlyData]>
+    func fetchQualityDistribution(range: AnalyticsRange) async throws -> Sourced<[QualityDistribution]>
+    func fetchWeekly() async throws -> Sourced<[WeeklyData]>
+    func fetchInsights(range: AnalyticsRange) async throws -> Sourced<[HealthInsight]>
 }
 
 // MARK: - Overview DTO from server

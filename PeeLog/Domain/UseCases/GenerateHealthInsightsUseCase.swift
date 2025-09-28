@@ -117,7 +117,7 @@ class GenerateHealthInsightsUseCase {
 }
 
 // Health insight types
-enum HealthInsightType {
+enum HealthInsightType: Sendable {
     case positive
     case info
     case warning
@@ -132,7 +132,7 @@ enum HealthInsightType {
 }
 
 // Health insight data structure
-struct HealthInsight {
+struct HealthInsight: Sendable {
     let type: HealthInsightType
     let title: String
     let message: String

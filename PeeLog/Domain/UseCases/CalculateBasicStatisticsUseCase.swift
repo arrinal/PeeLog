@@ -57,7 +57,7 @@ class CalculateBasicStatisticsUseCase {
 }
 
 // Data structure for basic statistics
-struct BasicStatistics {
+struct BasicStatistics: Sendable {
     let totalEvents: Int
     let thisWeekEvents: Int
     let averageDaily: Double

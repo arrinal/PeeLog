@@ -10,4 +10,5 @@ import Foundation
 @MainActor
 final class SyncControl {
     var isBlocked: Bool = false
+    var lastSuccessfulSyncAt: Date?
 }

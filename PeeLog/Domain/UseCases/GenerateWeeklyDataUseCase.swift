@@ -59,7 +59,7 @@ class GenerateWeeklyDataUseCase {
 }
 
 // Data structure for weekly data
-struct WeeklyData {
+struct WeeklyData: Sendable {
     let dayOfWeek: Int
     let dayName: String
     let count: Int

@@ -27,7 +27,7 @@ class AnalyzeHourlyPatternsUseCase {
 }
 
 // Data structure for hourly data
-struct HourlyData: Identifiable {
+struct HourlyData: Identifiable, Sendable {
     let id = UUID()
     let hour: Int
     let count: Int
