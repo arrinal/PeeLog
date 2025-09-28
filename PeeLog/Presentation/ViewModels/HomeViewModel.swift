@@ -35,6 +35,18 @@ class HomeViewModel: ObservableObject {
                     self.todaysEvents = self.getTodaysPeeEventsUseCase.execute()
                 }
             }
+            NotificationCenter.default.addObserver(forName: .eventsStoreWillReset, object: nil, queue: .main) { [weak self] _ in
+                guard let self else { return }
+                Task { @MainActor in
+                    self.todaysEvents = []
+                }
+            }
+            NotificationCenter.default.addObserver(forName: .eventsStoreDidReset, object: nil, queue: .main) { [weak self] _ in
+                guard let self else { return }
+                Task { @MainActor in
+                    self.todaysEvents = self.getTodaysPeeEventsUseCase.execute()
+                }
+            }
         }
     }
     

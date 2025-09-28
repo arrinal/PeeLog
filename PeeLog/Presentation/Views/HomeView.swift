@@ -218,8 +218,10 @@ struct HomeView: View {
             .sheet(isPresented: $showingMapSheet, onDismiss: {
                 selectedEvent = nil
             }) {
-                LocationMapView(event: selectedEvent)
-                    .ignoresSafeArea(.container, edges: .top)
+                if let selectedEvent = selectedEvent {
+                    LocationMapView(event: selectedEvent)
+                        .ignoresSafeArea(.container, edges: .top)
+                }
             }
             .onChange(of: selectedEvent) { oldValue, newValue in
                 if let event = newValue, event.hasLocation {
@@ -239,6 +241,21 @@ struct HomeView: View {
                 }
             }
         }
+                .onReceive(NotificationCenter.default.publisher(for: .eventsStoreWillReset)) { _ in
+                    Task { @MainActor in
+                        // Drop any references and reload from fresh store
+                        withAnimation(.easeIn(duration: 0.2)) {
+                            viewModel.todaysEvents = []
+                        }
+                    }
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .eventsStoreDidReset)) { _ in
+                    Task { @MainActor in
+                        withAnimation(.easeIn(duration: 0.25)) {
+                            viewModel.loadTodaysEvents()
+                        }
+                    }
+                }
         .onReceive(NetworkMonitor.shared.$isOnline) { isOnline in
             // Immediately reload local list regardless of status to avoid empty flicker
             viewModel.refreshOnConnectivityChange(isOnline: isOnline)

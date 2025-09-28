@@ -26,6 +26,20 @@ struct MapHistoryView: View {
             viewModel.loadEventsWithLocation()
             mapCameraPosition = viewModel.mapCameraPosition
         }
+        .onReceive(NotificationCenter.default.publisher(for: .eventsStoreWillReset)) { _ in
+            Task { @MainActor in
+                // Clear selections and data to avoid referencing detached objects
+                selectedAnnotation = nil
+                showingPopup = false
+                viewModel.clearSelectedEvent()
+                viewModel.eventsWithLocation = []
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .eventsStoreDidReset)) { _ in
+            Task { @MainActor in
+                viewModel.loadEventsWithLocation()
+            }
+        }
         .onChange(of: viewModel.mapCameraPosition) { oldValue, newValue in
             mapCameraPosition = newValue
         }
