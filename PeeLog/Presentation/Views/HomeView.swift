@@ -444,7 +444,7 @@ struct EventCard: View {
             .opacity(isDeleting ? 0.4 : 1.0)
             .animation(.none, value: offset)
             .simultaneousGesture(
-                DragGesture(minimumDistance: 1, coordinateSpace: .local)
+                DragGesture(minimumDistance: 20, coordinateSpace: .local)
                     .onChanged { value in
                         // Prevent interaction if already deleting
                         guard !isDeleting else { return }
