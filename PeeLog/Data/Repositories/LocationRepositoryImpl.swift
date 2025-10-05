@@ -169,8 +169,10 @@ class LocationRepositoryImpl: LocationRepository {
                             continuation.resume(throwing: error)
                         }
                     
-                    // Store cancellables
-                    self.cancellables.insert(cancellable!)
+                    // Store cancellables safely
+                    if let cancellable = cancellable {
+                        self.cancellables.insert(cancellable)
+                    }
                     self.cancellables.insert(errorCancellable)
                 }
 

@@ -57,6 +57,9 @@ struct StatisticsView: View {
                 viewModel.qualityDistribution = []
                 viewModel.weeklyData = []
                 viewModel.healthInsights = []
+                viewModel.showingQualityTrendsCustomDatePicker = false
+                viewModel.showingDailyPatternsCustomDatePicker = false
+                viewModel.showingQualityDistributionCustomDatePicker = false
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .eventsStoreDidReset)) { _ in
