@@ -11,12 +11,18 @@ import MapKit
 
 struct MapHistoryView: View {
     @Environment(\.modelContext) private var modelContext
-    @ObservedObject var viewModel: MapHistoryViewModel
+    @StateObject private var viewModel: MapHistoryViewModel
     @State private var showingSheet = false
     @State private var showingPopup = false
     @State private var popupPosition: CGPoint = .zero
     @State private var mapCameraPosition: MapCameraPosition = .automatic
-    @State private var selectedAnnotation: PeeEvent? = nil
+    @State private var selectedAnnotation: MapEventSnapshot? = nil
+    @State private var isStoreResetting = false
+    @State private var snapshots: [MapEventSnapshot] = []
+    
+    init(viewModel: MapHistoryViewModel) {
+        _viewModel = StateObject(wrappedValue: viewModel)
+    }
     
     var body: some View {
         NavigationStack {
@@ -25,23 +31,31 @@ struct MapHistoryView: View {
         .onAppear {
             viewModel.loadEventsWithLocation()
             mapCameraPosition = viewModel.mapCameraPosition
+            refreshSnapshots()
         }
         .onReceive(NotificationCenter.default.publisher(for: .eventsStoreWillReset)) { _ in
             Task { @MainActor in
                 // Clear selections and data to avoid referencing detached objects
+                isStoreResetting = true
                 selectedAnnotation = nil
                 showingPopup = false
                 viewModel.clearSelectedEvent()
                 viewModel.eventsWithLocation = []
+                snapshots = []
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .eventsStoreDidReset)) { _ in
             Task { @MainActor in
+                isStoreResetting = false
                 viewModel.loadEventsWithLocation()
+                refreshSnapshots()
             }
         }
         .onChange(of: viewModel.mapCameraPosition) { oldValue, newValue in
             mapCameraPosition = newValue
+        }
+        .onChange(of: viewModel.eventsWithLocation) { _, _ in
+            refreshSnapshots()
         }
     }
     
@@ -68,7 +82,13 @@ struct MapHistoryView: View {
             MapScaleView()
         }
         .onMapCameraChange { context in
-            mapCameraPosition = .camera(context.camera)
+            if !isStoreResetting {
+                mapCameraPosition = .camera(context.camera)
+            }
+        }
+        .transaction { transaction in
+            // Workaround for Metal drawable lifetime assertion: avoid animated Map state changes
+            transaction.disablesAnimations = true
         }
         .onTapGesture { location in
             // iOS 18 fix: Close popup when tapping map background
@@ -82,34 +102,39 @@ struct MapHistoryView: View {
                 }
             }
         }
+        .onDisappear {
+            // Ensure overlays are torn down before Map deallocates
+            showingPopup = false
+            showingSheet = false
+            viewModel.clearSelectedEvent()
+            selectedAnnotation = nil
+        }
     }
     
     @MapContentBuilder
     private var mapAnnotations: some MapContent {
-        ForEach(viewModel.eventsWithLocation, id: \.id) { event in
-            if let coordinate = event.locationCoordinate {
-                Annotation(
-                    event.locationName ?? "Pee Event",
-                    coordinate: coordinate
-                ) {
-                    pinView(for: event)
-                }
+        ForEach(snapshots, id: \.id) { item in
+            Annotation(
+                item.locationName ?? "Pee Event",
+                coordinate: item.coordinate
+            ) {
+                pinView(for: item)
             }
         }
     }
     
-    private func pinView(for event: PeeEvent) -> some View {
-        PeeMapPin(event: event, isSelected: selectedAnnotation?.id == event.id)
+    private func pinView(for item: MapEventSnapshot) -> some View {
+        PeeMapPin(item: item, isSelected: selectedAnnotation?.id == item.id)
             .onTapGesture {
-                handlePinTap(event: event)
+                handlePinTap(item: item)
             }
             .allowsHitTesting(true) // iOS 18 fix: Ensure pin can receive taps
     }
     
     @ViewBuilder
     private var popupOverlay: some View {
-        if let selectedEvent = viewModel.selectedEvent, showingPopup {
-            PeeEventPopup(event: selectedEvent) {
+        if let selected = selectedAnnotation, showingPopup, !isStoreResetting {
+            PeeEventPopup(item: selected) {
                 closePopup()
             } onDetailTap: {
                 showingSheet = true
@@ -126,7 +151,7 @@ struct MapHistoryView: View {
     private var bottomInfoView: some View {
                 VStack {
                     Spacer()
-                    Text("\(viewModel.eventsWithLocation.count) events on map")
+                    Text("\(snapshots.count) events on map")
                         .font(.caption)
                         .padding(8)
                         .background(.ultraThinMaterial)
@@ -135,9 +160,9 @@ struct MapHistoryView: View {
                 }
             }
     
-    private func handlePinTap(event: PeeEvent) {
+    private func handlePinTap(item: MapEventSnapshot) {
         // iOS 18 fix: Prevent rapid state changes and conflicts
-        if showingPopup && selectedAnnotation?.id == event.id {
+        if showingPopup && selectedAnnotation?.id == item.id {
             // Already showing popup for this event, close it
             closePopup()
         } else {
@@ -153,8 +178,7 @@ struct MapHistoryView: View {
                 
                 // Set new selection and show popup
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                    viewModel.selectedEvent = event
-                    selectedAnnotation = event
+                    selectedAnnotation = item
                     showingPopup = true
                 }
             }
@@ -168,7 +192,6 @@ struct MapHistoryView: View {
         
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 200_000_000)
-            viewModel.selectedEvent = nil
             selectedAnnotation = nil
         }
     }
@@ -176,14 +199,14 @@ struct MapHistoryView: View {
 
 // MARK: - Custom Map Pin Component
 struct PeeMapPin: View {
-    let event: PeeEvent
+    fileprivate let item: MapEventSnapshot
     let isSelected: Bool
     
     var body: some View {
         ZStack {
             // Outer ring for selection
             Circle()
-                .fill(event.quality.color.opacity(0.3))
+                .fill(item.quality.color.opacity(0.3))
                 .frame(width: isSelected ? 44 : 0, height: isSelected ? 44 : 0)
                 .scaleEffect(isSelected ? 1.0 : 0.1)
                 .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isSelected)
@@ -193,8 +216,8 @@ struct PeeMapPin: View {
                 .fill(
                     LinearGradient(
                         gradient: Gradient(colors: [
-                            event.quality.color,
-                            event.quality.color.opacity(0.8)
+                            item.quality.color,
+                            item.quality.color.opacity(0.8)
                         ]),
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
@@ -206,7 +229,7 @@ struct PeeMapPin: View {
                         .stroke(Color.white, lineWidth: isSelected ? 3 : 2)
                 )
                 .shadow(
-                    color: event.quality.color.opacity(0.4),
+                    color: item.quality.color.opacity(0.4),
                     radius: isSelected ? 8 : 4,
                     x: 0,
                     y: isSelected ? 4 : 2
@@ -215,7 +238,7 @@ struct PeeMapPin: View {
                 .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isSelected)
             
             // Quality emoji
-            Text(event.quality.emoji)
+            Text(item.quality.emoji)
                 .font(.system(size: isSelected ? 14 : 10, weight: .medium))
                 .scaleEffect(isSelected ? 1.1 : 1.0)
                 .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isSelected)
@@ -225,20 +248,20 @@ struct PeeMapPin: View {
 
 // MARK: - Popup Component
 struct PeeEventPopup: View {
-    let event: PeeEvent
+    fileprivate let item: MapEventSnapshot
     let onClose: () -> Void
     let onDetailTap: () -> Void
     
     private var timeString: String {
         let formatter = DateFormatter()
         formatter.timeStyle = .short
-        return formatter.string(from: event.timestamp)
+        return formatter.string(from: item.timestamp)
     }
     
     private var dateString: String {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
-        return formatter.string(from: event.timestamp)
+        return formatter.string(from: item.timestamp)
     }
     
     var body: some View {
@@ -252,20 +275,20 @@ struct PeeEventPopup: View {
                     HStack(spacing: 12) {
                         ZStack {
                             Circle()
-                                .fill(event.quality.color)
+                                .fill(item.quality.color)
                                 .frame(width: 48, height: 48)
-                                .shadow(color: event.quality.color.opacity(0.4), radius: 6, x: 0, y: 3)
+                                .shadow(color: item.quality.color.opacity(0.4), radius: 6, x: 0, y: 3)
                             
-                            Text(event.quality.emoji)
+                            Text(item.quality.emoji)
                                 .font(.system(size: 20))
                         }
                         
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(event.quality.rawValue)
+                            Text(item.quality.rawValue)
                                 .font(.system(size: 18, weight: .semibold))
                                 .foregroundColor(.primary)
                             
-                            Text(event.quality.description)
+                            Text(item.quality.description)
                                 .font(.system(size: 14, weight: .medium))
                                 .foregroundColor(.secondary)
                         }
@@ -298,7 +321,7 @@ struct PeeEventPopup: View {
                         }
                         
                         // Location info
-                        if let locationName = event.locationName {
+                        if let locationName = item.locationName {
                             HStack {
                                 Image(systemName: "mappin.circle.fill")
                                     .font(.system(size: 14))
@@ -312,7 +335,7 @@ struct PeeEventPopup: View {
                         }
                         
                         // Notes if available
-                        if let notes = event.notes, !notes.isEmpty {
+                        if let notes = item.notes, !notes.isEmpty {
                             HStack {
                                 Image(systemName: "note.text")
                                     .font(.system(size: 14))
@@ -400,3 +423,33 @@ struct Triangle: Shape {
         .modelContainer(container)
         .environment(\.dependencyContainer, dependencyContainer)
 } 
+
+// Snapshot used to render Map content safely, without holding live SwiftData objects
+private struct MapEventSnapshot: Identifiable {
+    let id: UUID
+    let coordinate: CLLocationCoordinate2D
+    let quality: PeeQuality
+    let timestamp: Date
+    let locationName: String?
+    let notes: String?
+}
+
+private extension MapHistoryView {
+    func refreshSnapshots() {
+        guard !isStoreResetting else {
+            snapshots = []
+            return
+        }
+        snapshots = viewModel.eventsWithLocation.compactMap { event in
+            guard let coordinate = event.locationCoordinate else { return nil }
+            return MapEventSnapshot(
+                id: event.id,
+                coordinate: coordinate,
+                quality: event.quality,
+                timestamp: event.timestamp,
+                locationName: event.locationName,
+                notes: event.notes
+            )
+        }
+    }
+}

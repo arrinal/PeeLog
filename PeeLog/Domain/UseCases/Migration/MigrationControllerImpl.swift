@@ -37,8 +37,12 @@ final class MigrationControllerImpl: MigrationController {
         
         // 3) Fetch full cloud snapshot and store locally (replace local events for consistency)
         let cloudEvents = try await firestoreService.fetchAllEvents(uid: uid)
+        // Notify views that event store is about to be reset
+        NotificationCenter.default.post(name: .eventsStoreWillReset, object: nil)
         try peeEventRepository.clearAllEvents()
         try peeEventRepository.addEvents(cloudEvents)
+        // Notify views that reset completed
+        NotificationCenter.default.post(name: .eventsStoreDidReset, object: nil)
         NotificationCenter.default.post(name: .eventsDidSync, object: nil)
         
         // 4) Remove guest user locally
@@ -50,6 +54,7 @@ final class MigrationControllerImpl: MigrationController {
         guard let uid = Auth.auth().currentUser?.uid else { return }
         
         // 1) Clear all local data
+        NotificationCenter.default.post(name: .eventsStoreWillReset, object: nil)
         try peeEventRepository.clearAllEvents()
         
         // 2) Fetch cloud user (if exists) and save preferences locally
@@ -64,6 +69,7 @@ final class MigrationControllerImpl: MigrationController {
         // 3) Fetch cloud events and store locally
         let cloudEvents = try await firestoreService.fetchAllEvents(uid: uid)
         try peeEventRepository.addEvents(cloudEvents)
+        NotificationCenter.default.post(name: .eventsStoreDidReset, object: nil)
         NotificationCenter.default.post(name: .eventsDidSync, object: nil)
     }
 }

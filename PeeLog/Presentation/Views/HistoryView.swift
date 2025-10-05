@@ -21,6 +21,7 @@ struct HistoryView: View {
     @State private var selectedEvent: PeeEvent?
     @State private var showingMapSheet = false
     @State private var showingFilterSheet = false
+    @State private var isStoreResetting = false
     
     var filteredEvents: [PeeEvent] {
         let range = selectedFilter == .custom ? (customStartDate, customEndDate) : selectedFilter.dateRange
@@ -39,8 +40,9 @@ struct HistoryView: View {
             backgroundGradient
                 .ignoresSafeArea()
             
-            ScrollView {
-                VStack(spacing: 20) {
+            if !isStoreResetting {
+                ScrollView {
+                    VStack(spacing: 20) {
                     // Filter Card
                     VStack(spacing: 16) {
                         HStack {
@@ -80,7 +82,7 @@ struct HistoryView: View {
                     .padding(.top, 10)
                     
                     // Events Content
-            if filteredEvents.isEmpty {
+                    if filteredEvents.isEmpty {
                         // Empty State Card
                         VStack(spacing: 20) {
                             Image(systemName: "calendar.circle")
@@ -133,7 +135,16 @@ struct HistoryView: View {
                         }
                         .padding(.horizontal, 20)
                     }
+                    }
                 }
+            } else {
+                // During store reset, avoid touching SwiftData objects
+                VStack(spacing: 16) {
+                    ProgressView()
+                    Text("Refreshing data…")
+                        .foregroundColor(.secondary)
+                }
+                .padding()
             }
         }
         .navigationTitle("History")
@@ -162,9 +173,22 @@ struct HistoryView: View {
             )
         }
         .onChange(of: selectedEvent) { oldValue, newValue in
-            if let event = newValue, event.hasLocation {
+            if isStoreResetting {
+                showingMapSheet = false
+                selectedEvent = nil
+            } else if let event = newValue, event.hasLocation {
                 showingMapSheet = true
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .eventsStoreWillReset)) { _ in
+            // Guard against detached SwiftData objects during reset window
+            isStoreResetting = true
+            selectedEvent = nil
+            showingMapSheet = false
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .eventsStoreDidReset)) { _ in
+            // Allow view to re-query after reset completes
+            isStoreResetting = false
         }
     }
     

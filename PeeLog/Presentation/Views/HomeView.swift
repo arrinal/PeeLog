@@ -18,6 +18,7 @@ struct HomeView: View {
     @State private var selectedEvent: PeeEvent?
     @State private var showingMapSheet = false
     @State private var mapPosition: MapCameraPosition = .automatic
+    @State private var isStoreResetting = false
     
     init(viewModel: HomeViewModel) {
         _viewModel = StateObject(wrappedValue: viewModel)
@@ -169,6 +170,9 @@ struct HomeView: View {
                         viewModel.loadTodaysEvents()
                     }
                 }
+                .transaction { tx in
+                    if isStoreResetting { tx.disablesAnimations = true }
+                }
                 
                 // Floating Action Button
                 VStack {
@@ -224,7 +228,10 @@ struct HomeView: View {
                 }
             }
             .onChange(of: selectedEvent) { oldValue, newValue in
-                if let event = newValue, event.hasLocation {
+                if isStoreResetting {
+                    showingMapSheet = false
+                    selectedEvent = nil
+                } else if let event = newValue, event.hasLocation {
                     showingMapSheet = true
                 }
             }
@@ -245,7 +252,11 @@ struct HomeView: View {
                     Task { @MainActor in
                         // Drop any references and reload from fresh store
                         withAnimation(.easeIn(duration: 0.2)) {
+                            isStoreResetting = true
                             viewModel.todaysEvents = []
+                            // Ensure any map sheets are dismissed while store resets
+                            showingMapSheet = false
+                            selectedEvent = nil
                         }
                     }
                 }
@@ -253,6 +264,7 @@ struct HomeView: View {
                     Task { @MainActor in
                         withAnimation(.easeIn(duration: 0.25)) {
                             viewModel.loadTodaysEvents()
+                            isStoreResetting = false
                         }
                     }
                 }

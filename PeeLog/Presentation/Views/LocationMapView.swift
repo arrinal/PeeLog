@@ -12,22 +12,28 @@ struct LocationMapView: View {
     let event: PeeEvent?
     @Environment(\.dismiss) private var dismiss
     @State private var mapCameraPosition: MapCameraPosition = .automatic
+    @State private var snapshot: EventSnapshot = EventSnapshot.empty
     
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                if let event = event, let coordinate = event.locationCoordinate {
+                if let coordinate = snapshot.coordinate, let quality = snapshot.quality, let timestamp = snapshot.timestamp {
                     // Map view
                     Map(position: $mapCameraPosition) {
-                        Marker(event.locationName ?? "Pee Location", coordinate: coordinate)
+                        Marker(snapshot.locationName ?? "Pee Location", coordinate: coordinate)
                             .tint(.blue)
+                    }
+                    .transaction { tx in
+                        tx.disablesAnimations = true
                     }
                     .onAppear {
                         // Set initial camera position when the view appears
-                        mapCameraPosition = .region(MKCoordinateRegion(
-                            center: coordinate,
-                            span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
-                        ))
+                        mapCameraPosition = .region(
+                            MKCoordinateRegion(
+                                center: coordinate,
+                                span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+                            )
+                        )
                     }
                     .frame(height: 300)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
@@ -37,19 +43,19 @@ struct LocationMapView: View {
                     VStack(alignment: .leading, spacing: 16) {
                         HStack {
                             Circle()
-                                .fill(event.quality.color)
+                                .fill(quality.color)
                                 .frame(width: 16, height: 16)
                                 .overlay(Circle().stroke(Color.gray, lineWidth: 0.5))
                             
-                            Text(event.quality.emoji)
+                            Text(quality.emoji)
                                 .font(.headline)
                             
-                            Text(event.quality.rawValue)
+                            Text(quality.rawValue)
                                 .font(.headline)
                             
                             Spacer()
                             
-                            Text(event.timestamp, style: .time)
+                            Text(timestamp, style: .time)
                                 .font(.headline)
                         }
                         .padding(.bottom, 4)
@@ -64,12 +70,12 @@ struct LocationMapView: View {
                                     .font(.headline)
                             }
                             
-                            Text(event.locationName ?? "Unknown location")
+                            Text(snapshot.locationName ?? "Unknown location")
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
                         }
                         
-                        if let notes = event.notes, !notes.isEmpty {
+                        if let notes = snapshot.notes, !notes.isEmpty {
                             Divider()
                             
                             VStack(alignment: .leading, spacing: 8) {
@@ -95,7 +101,7 @@ struct LocationMapView: View {
                                     .font(.headline)
                             }
                             
-                            Text(event.quality.description)
+                            Text(quality.description)
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
                         }
@@ -123,7 +129,7 @@ struct LocationMapView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
-            .navigationTitle(event?.locationName ?? "Location")
+            .navigationTitle(snapshot.locationName ?? "Location")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -133,7 +139,52 @@ struct LocationMapView: View {
                 }
             }
         }
+        .onAppear {
+            if let e = event {
+                snapshot = EventSnapshot(
+                    coordinate: e.locationCoordinate,
+                    quality: e.quality,
+                    timestamp: e.timestamp,
+                    locationName: e.locationName,
+                    notes: e.notes
+                )
+                if let coord = snapshot.coordinate {
+                    mapCameraPosition = .region(
+                        MKCoordinateRegion(
+                            center: coord,
+                            span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+                        )
+                    )
+                }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .eventsStoreWillReset)) { _ in
+            Task { @MainActor in
+                // Dismiss to ensure no SwiftData references linger while store resets
+                dismiss()
+            }
+        }
+        .onDisappear {
+            // Clear map state to avoid Metal drawable assertions
+            mapCameraPosition = .automatic
+        }
     }
+}
+
+private struct EventSnapshot {
+    let coordinate: CLLocationCoordinate2D?
+    let quality: PeeQuality?
+    let timestamp: Date?
+    let locationName: String?
+    let notes: String?
+    
+    static let empty = EventSnapshot(
+        coordinate: nil,
+        quality: nil,
+        timestamp: nil,
+        locationName: nil,
+        notes: nil
+    )
 }
 
 #Preview {

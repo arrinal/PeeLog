@@ -83,6 +83,7 @@ final class StatisticsViewModel: ObservableObject {
     private var lastAnalyticsRefreshAt: Date?
     private let foregroundRefreshThresholdSeconds: TimeInterval = 60 * 30
     private var observersInstalled = false
+    private var isStoreResetting = false
     
     // MARK: - Initializer
     init(
@@ -112,6 +113,7 @@ final class StatisticsViewModel: ObservableObject {
         observersInstalled = true
         NotificationCenter.default.addObserver(forName: .eventsStoreWillReset, object: nil, queue: .main) { [weak self] _ in
             guard let self else { return }
+            self.isStoreResetting = true
             self.totalEvents = 0
             self.thisWeekEvents = 0
             self.averageDaily = 0
@@ -126,6 +128,7 @@ final class StatisticsViewModel: ObservableObject {
         }
         NotificationCenter.default.addObserver(forName: .eventsStoreDidReset, object: nil, queue: .main) { [weak self] _ in
             guard let self else { return }
+            self.isStoreResetting = false
             self.loadStatistics()
         }
     }
@@ -466,8 +469,9 @@ final class StatisticsViewModel: ObservableObject {
             insightsSource = ins.source
             debugPrint("[Analytics] Offline Insights source=\(insightsSource.rawValue)")
         } else {
-            // Use already computed basicStatistics
-            healthInsights = generateHealthInsightsUseCase.execute(statistics: basicStatistics!, events: allEvents)
+            // Use computed basic statistics safely (recompute if needed)
+            let stats = basicStatistics ?? calculateStatisticsUseCase.execute(events: allEvents)
+            healthInsights = generateHealthInsightsUseCase.execute(statistics: stats, events: allEvents)
             insightsSource = .local
             debugPrint("[Analytics] Offline Insights source=local (fallback)")
         }
