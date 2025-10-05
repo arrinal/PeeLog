@@ -67,8 +67,9 @@ struct MapHistoryView: View {
         }
         .navigationTitle("Pee Map")
         .sheet(isPresented: $showingSheet) {
-            if let selectedEvent = viewModel.selectedEvent {
-                LocationMapView(event: selectedEvent)
+            if let selected = selectedAnnotation {
+                let matchedEvent = viewModel.eventsWithLocation.first(where: { $0.id == selected.id })
+                LocationMapView(event: matchedEvent)
             }
         }
     }

@@ -225,7 +225,6 @@ final class StatisticsViewModel: ObservableObject {
             // Fallback to local computations if overview fails completely
             loadLocal()
             overviewSource = .local
-            NotificationCenter.default.post(name: .serverStatusToast, object: nil, userInfo: ["message": "Server unavailable — Overview from local"])
             debugPrint("[Analytics] Overview source=local (fallback)")
         }
         isLoadingOverview = false
@@ -233,15 +232,11 @@ final class StatisticsViewModel: ObservableObject {
         if let tr = try? await trTask {
             qualityTrendData = tr.data
             trendsSource = tr.source
-            if tr.source == .cache {
-                NotificationCenter.default.post(name: .serverStatusToast, object: nil, userInfo: ["message": "Server unavailable — Trends from cache"])
-            }
             debugPrint("[Analytics] Trends source=\(trendsSource.rawValue) period=\(qualityTrendsPeriod.rawValue)")
         } else {
             // Local fallback
             generateQualityTrends()
             trendsSource = .local
-            NotificationCenter.default.post(name: .serverStatusToast, object: nil, userInfo: ["message": "Server unavailable — Trends from local"])
             debugPrint("[Analytics] Trends source=local (fallback) period=\(qualityTrendsPeriod.rawValue)")
         }
         isLoadingTrends = false
@@ -249,14 +244,10 @@ final class StatisticsViewModel: ObservableObject {
         if let ho = try? await hoTask {
             hourlyData = ho.data
             hourlySource = ho.source
-            if ho.source == .cache {
-                NotificationCenter.default.post(name: .serverStatusToast, object: nil, userInfo: ["message": "Server unavailable — Hourly from cache"])
-            }
             debugPrint("[Analytics] Hourly source=\(hourlySource.rawValue) period=\(dailyPatternsPeriod.rawValue)")
         } else {
             generateHourlyPatterns()
             hourlySource = .local
-            NotificationCenter.default.post(name: .serverStatusToast, object: nil, userInfo: ["message": "Server unavailable — Hourly from local"])
             debugPrint("[Analytics] Hourly source=local (fallback) period=\(dailyPatternsPeriod.rawValue)")
         }
         isLoadingHourly = false
@@ -264,14 +255,10 @@ final class StatisticsViewModel: ObservableObject {
         if let di = try? await diTask {
             qualityDistribution = di.data
             distributionSource = di.source
-            if di.source == .cache {
-                NotificationCenter.default.post(name: .serverStatusToast, object: nil, userInfo: ["message": "Server unavailable — Distribution from cache"])
-            }
             debugPrint("[Analytics] Distribution source=\(distributionSource.rawValue) period=\(qualityDistributionPeriod.rawValue)")
         } else {
             generateQualityDistribution()
             distributionSource = .local
-            NotificationCenter.default.post(name: .serverStatusToast, object: nil, userInfo: ["message": "Server unavailable — Distribution from local"])
             debugPrint("[Analytics] Distribution source=local (fallback) period=\(qualityDistributionPeriod.rawValue)")
         }
         isLoadingDistribution = false
@@ -279,14 +266,10 @@ final class StatisticsViewModel: ObservableObject {
         if let we = try? await weTask {
             weeklyData = we.data
             weeklySource = we.source
-            if we.source == .cache {
-                NotificationCenter.default.post(name: .serverStatusToast, object: nil, userInfo: ["message": "Server unavailable — Weekly from cache"])
-            }
             debugPrint("[Analytics] Weekly source=\(weeklySource.rawValue)")
         } else {
             generateWeeklyData()
             weeklySource = .local
-            NotificationCenter.default.post(name: .serverStatusToast, object: nil, userInfo: ["message": "Server unavailable — Weekly from local"])
             debugPrint("[Analytics] Weekly source=local (fallback)")
         }
         isLoadingWeekly = false
@@ -294,16 +277,12 @@ final class StatisticsViewModel: ObservableObject {
         if let ins = try? await insTask {
             healthInsights = ins.data
             insightsSource = ins.source
-            if ins.source == .cache {
-                NotificationCenter.default.post(name: .serverStatusToast, object: nil, userInfo: ["message": "Server unavailable — Insights from cache"])
-            }
             debugPrint("[Analytics] Insights source=\(insightsSource.rawValue) period=\(qualityTrendsPeriod.rawValue)")
         } else {
             // Local insights require basic statistics; compute without touching published overview values
             let stats = calculateStatisticsUseCase.execute(events: allEvents)
             healthInsights = generateHealthInsightsUseCase.execute(statistics: stats, events: allEvents)
             insightsSource = .local
-            NotificationCenter.default.post(name: .serverStatusToast, object: nil, userInfo: ["message": "Server unavailable — Insights from local"])
             debugPrint("[Analytics] Insights source=local (fallback) period=\(qualityTrendsPeriod.rawValue)")
         }
         isLoadingInsights = false
