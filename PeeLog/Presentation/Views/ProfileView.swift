@@ -213,25 +213,18 @@ struct ProfileView: View {
         if let user = viewModel.currentUser {
             Section("Account") {
 				if user.authProvider == .guest {
-					Button(action: { viewModel.showAuthenticationView = true }) {
-						HStack {
-							Image(systemName: "person.fill.questionmark")
-								.foregroundColor(.orange)
-								.frame(width: 20)
-							Text("Sign In or Create Account")
-								.foregroundColor(.blue)
-								.fontWeight(.semibold)
-							Spacer()
-						}
-					}
-					.buttonStyle(.plain)
-					.frame(maxWidth: .infinity, alignment: .leading)
-					.padding(.horizontal, 16)
-					.padding(.vertical, 10)
-					.listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                    HStack {
+                        Image(systemName: "person.fill.questionmark")
+                            .foregroundColor(.orange)
+                            .frame(width: 20)
+                        Button("Sign In or Create Account") {
+                            viewModel.showAuthenticationView = true
+                        }
+                        Spacer()
+                    }
 					.listRowBackground(
 						ZStack {
-							let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
+							let shape = RoundedRectangle(cornerRadius: 24, style: .continuous)
 							shape.fill(Color(.secondarySystemGroupedBackground))
 							// Subtle base border
 							shape.strokeBorder(Color.accentColor.opacity(0.12), lineWidth: 1)
