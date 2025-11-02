@@ -2,7 +2,7 @@
 //  AppDialog.swift
 //  PeeLog
 //
-//  Created by Assistant on 12/08/25.
+//  Created by Arrinal S on 12/08/25.
 //
 
 import SwiftUI

@@ -2,7 +2,7 @@
 //  SyncControl.swift
 //  PeeLog
 //
-//  Created by Assistant on 10/08/25.
+//  Created by Arrinal S on 10/08/25.
 //
 
 import Foundation
