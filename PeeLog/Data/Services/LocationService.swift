@@ -146,6 +146,7 @@ class LocationService: NSObject, ObservableObject, @preconcurrency CLLocationMan
             
             // Always update the user location
             location = newLocation
+            SharedStorage.save(location: newLocation, name: locationName)
             
             // Check if we should perform geocoding
             let shouldGeocode = shouldPerformGeocoding(for: newLocation)
@@ -156,6 +157,7 @@ class LocationService: NSObject, ObservableObject, @preconcurrency CLLocationMan
             } else if !isLoadingLocation && locationName == nil {
                 // If not geocoding but we have no location name, set a reasonable default
                 locationName = "Current Location"
+                SharedStorage.save(location: newLocation, name: locationName)
             }
         }
     }
@@ -248,6 +250,7 @@ class LocationService: NSObject, ObservableObject, @preconcurrency CLLocationMan
                 }
                 
                 self.isLoadingLocation = false
+                SharedStorage.save(location: self.location, name: self.locationName)
             }
         }
     }

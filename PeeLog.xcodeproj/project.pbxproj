@@ -7,12 +7,22 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		705210B42E9645B8003CC707 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 705210B32E9645B8003CC707 /* WidgetKit.framework */; };
+		705210B62E9645B8003CC707 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 705210B52E9645B8003CC707 /* SwiftUI.framework */; };
+		705210C72E9645BA003CC707 /* PeeLogWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 705210B22E9645B8003CC707 /* PeeLogWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		70A2EA942E472D83002D4947 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 70A2EA932E472D83002D4947 /* FirebaseFirestore */; };
 		70C2FFA32E2CE06200878AED /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = 70C2FFA22E2CE06200878AED /* FirebaseAnalytics */; };
 		70C2FFA52E2CE06200878AED /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 70C2FFA42E2CE06200878AED /* FirebaseAuth */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		705210C52E9645BA003CC707 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 709FDFA72DCA6AD900185FE3 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 705210B12E9645B8003CC707;
+			remoteInfo = PeeLogWidgetExtension;
+		};
 		709FDFBF2DCA6ADC00185FE3 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 709FDFA72DCA6AD900185FE3 /* Project object */;
@@ -29,13 +39,48 @@
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		705210CC2E9645BA003CC707 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				705210C72E9645BA003CC707 /* PeeLogWidgetExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		705210B22E9645B8003CC707 /* PeeLogWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = PeeLogWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		705210B32E9645B8003CC707 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		705210B52E9645B8003CC707 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		705210D22E964BD9003CC707 /* PeeLogWidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PeeLogWidgetExtension.entitlements; sourceTree = "<group>"; };
 		709FDFAF2DCA6AD900185FE3 /* PeeLog.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PeeLog.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		709FDFBE2DCA6ADC00185FE3 /* PeeLogTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PeeLogTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		709FDFC82DCA6ADC00185FE3 /* PeeLogUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PeeLogUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		705210CB2E9645BA003CC707 /* Exceptions for "PeeLogWidget" folder in "PeeLogWidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 705210B12E9645B8003CC707 /* PeeLogWidgetExtension */;
+		};
+		705210CE2E96462B003CC707 /* Exceptions for "PeeLog" folder in "PeeLogWidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Domain/Entities/PeeQuality.swift,
+				Domain/Utilities/QuickLogQueue.swift,
+				Domain/Utilities/QuickLogSettings.swift,
+				Domain/Utilities/SharedStorage.swift,
+			);
+			target = 705210B12E9645B8003CC707 /* PeeLogWidgetExtension */;
+		};
 		709FE0172DCA6C9F00185FE3 /* Exceptions for "PeeLog" folder in "PeeLog" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -46,10 +91,19 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		705210B72E9645B8003CC707 /* PeeLogWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				705210CB2E9645BA003CC707 /* Exceptions for "PeeLogWidget" folder in "PeeLogWidgetExtension" target */,
+			);
+			path = PeeLogWidget;
+			sourceTree = "<group>";
+		};
 		709FDFB12DCA6AD900185FE3 /* PeeLog */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				709FE0172DCA6C9F00185FE3 /* Exceptions for "PeeLog" folder in "PeeLog" target */,
+				705210CE2E96462B003CC707 /* Exceptions for "PeeLog" folder in "PeeLogWidgetExtension" target */,
 			);
 			path = PeeLog;
 			sourceTree = "<group>";
@@ -67,6 +121,15 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		705210AF2E9645B8003CC707 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				705210B62E9645B8003CC707 /* SwiftUI.framework in Frameworks */,
+				705210B42E9645B8003CC707 /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		709FDFAC2DCA6AD900185FE3 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -97,9 +160,11 @@
 		709FDFA62DCA6AD900185FE3 = {
 			isa = PBXGroup;
 			children = (
+				705210D22E964BD9003CC707 /* PeeLogWidgetExtension.entitlements */,
 				709FDFB12DCA6AD900185FE3 /* PeeLog */,
 				709FDFC12DCA6ADC00185FE3 /* PeeLogTests */,
 				709FDFCB2DCA6ADC00185FE3 /* PeeLogUITests */,
+				705210B72E9645B8003CC707 /* PeeLogWidget */,
 				70FF9C352E095C9F00529313 /* Frameworks */,
 				709FDFB02DCA6AD900185FE3 /* Products */,
 			);
@@ -111,6 +176,7 @@
 				709FDFAF2DCA6AD900185FE3 /* PeeLog.app */,
 				709FDFBE2DCA6ADC00185FE3 /* PeeLogTests.xctest */,
 				709FDFC82DCA6ADC00185FE3 /* PeeLogUITests.xctest */,
+				705210B22E9645B8003CC707 /* PeeLogWidgetExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -118,6 +184,8 @@
 		70FF9C352E095C9F00529313 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				705210B32E9645B8003CC707 /* WidgetKit.framework */,
+				705210B52E9645B8003CC707 /* SwiftUI.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -125,6 +193,28 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		705210B12E9645B8003CC707 /* PeeLogWidgetExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 705210C82E9645BA003CC707 /* Build configuration list for PBXNativeTarget "PeeLogWidgetExtension" */;
+			buildPhases = (
+				705210AE2E9645B8003CC707 /* Sources */,
+				705210AF2E9645B8003CC707 /* Frameworks */,
+				705210B02E9645B8003CC707 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				705210B72E9645B8003CC707 /* PeeLogWidget */,
+			);
+			name = PeeLogWidgetExtension;
+			packageProductDependencies = (
+			);
+			productName = PeeLogWidgetExtension;
+			productReference = 705210B22E9645B8003CC707 /* PeeLogWidgetExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		709FDFAE2DCA6AD900185FE3 /* PeeLog */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 709FDFD22DCA6ADC00185FE3 /* Build configuration list for PBXNativeTarget "PeeLog" */;
@@ -132,10 +222,12 @@
 				709FDFAB2DCA6AD900185FE3 /* Sources */,
 				709FDFAC2DCA6AD900185FE3 /* Frameworks */,
 				709FDFAD2DCA6AD900185FE3 /* Resources */,
+				705210CC2E9645BA003CC707 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				705210C62E9645BA003CC707 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				709FDFB12DCA6AD900185FE3 /* PeeLog */,
@@ -203,9 +295,12 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 1630;
+				LastSwiftUpdateCheck = 2600;
 				LastUpgradeCheck = 1630;
 				TargetAttributes = {
+					705210B12E9645B8003CC707 = {
+						CreatedOnToolsVersion = 26.0.1;
+					};
 					709FDFAE2DCA6AD900185FE3 = {
 						CreatedOnToolsVersion = 16.3;
 					};
@@ -239,11 +334,19 @@
 				709FDFAE2DCA6AD900185FE3 /* PeeLog */,
 				709FDFBD2DCA6ADC00185FE3 /* PeeLogTests */,
 				709FDFC72DCA6ADC00185FE3 /* PeeLogUITests */,
+				705210B12E9645B8003CC707 /* PeeLogWidgetExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		705210B02E9645B8003CC707 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		709FDFAD2DCA6AD900185FE3 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -268,6 +371,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		705210AE2E9645B8003CC707 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		709FDFAB2DCA6AD900185FE3 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -292,6 +402,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		705210C62E9645BA003CC707 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 705210B12E9645B8003CC707 /* PeeLogWidgetExtension */;
+			targetProxy = 705210C52E9645BA003CC707 /* PBXContainerItemProxy */;
+		};
 		709FDFC02DCA6ADC00185FE3 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 709FDFAE2DCA6AD900185FE3 /* PeeLog */;
@@ -305,6 +420,74 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		705210C92E9645BA003CC707 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = PeeLogWidgetExtension.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = C625QPFG8X;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = PeeLogWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = PeeLogWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				OTHER_SWIFT_FLAGS = "-D WIDGETS_BUILD";
+				PRODUCT_BUNDLE_IDENTIFIER = com.arrinal.PeeLog.PeeLogWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		705210CA2E9645BA003CC707 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = PeeLogWidgetExtension.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = C625QPFG8X;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = PeeLogWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = PeeLogWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				OTHER_SWIFT_FLAGS = "-D WIDGETS_BUILD";
+				PRODUCT_BUNDLE_IDENTIFIER = com.arrinal.PeeLog.PeeLogWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 		709FDFD02DCA6ADC00185FE3 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -577,6 +760,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		705210C82E9645BA003CC707 /* Build configuration list for PBXNativeTarget "PeeLogWidgetExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				705210C92E9645BA003CC707 /* Debug */,
+				705210CA2E9645BA003CC707 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		709FDFAA2DCA6AD900185FE3 /* Build configuration list for PBXProject "PeeLog" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

@@ -9,6 +9,8 @@ import SwiftUI
 import SwiftData
 import FirebaseCore
 import FirebaseFirestore
+import FirebaseAnalytics
+import AppIntents
 
 class AppDelegate: NSObject, UIApplicationDelegate {
   func application(_ application: UIApplication,
@@ -20,6 +22,9 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     // Optional: unlimited cache to favor offline usage
     settings.cacheSizeBytes = FirestoreCacheSizeUnlimited
     Firestore.firestore().settings = settings
+
+    // Ensure Analytics collection is enabled regardless of plist flag
+    Analytics.setAnalyticsCollectionEnabled(true)
 
     return true
   }
@@ -52,6 +57,15 @@ struct PeeLogApp: App {
                 .environment(\.dependencyContainer, container)
                 .modelContainer(sharedModelContainer)
                 .preferredColorScheme(colorScheme)
+                .task { // handle first launch cold start
+                    drainQuickLogQueue()
+                }
+                .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+                    drainQuickLogQueue()
+                }
+                .onOpenURL { url in
+                    handleDeepLink(url)
+                }
         }
     }
     
@@ -65,6 +79,97 @@ struct PeeLogApp: App {
             return nil
         default:
             return nil
+        }
+    }
+}
+
+// MARK: - Quick Log Queue Drain
+
+extension PeeLogApp {
+    @MainActor
+    private func drainQuickLogQueue() {
+        let payloads = QuickLogQueue.drain()
+        guard !payloads.isEmpty else { return }
+        let repo = container.makePeeEventRepository(modelContext: sharedModelContainer.mainContext)
+        var didAddAny = false
+        for payload in payloads {
+            let tsAny = payload["timestamp"]
+            guard let tsVal = tsAny else { continue }
+            let ts: Double = (tsVal as? Double) ?? (tsVal as? NSNumber)?.doubleValue ?? 0
+            guard ts != 0 else { continue }
+            guard let qualityRaw = payload["quality"] as? String,
+                  let quality = PeeQuality(rawValue: qualityRaw) else { continue }
+            let latAny = payload["latitude"]
+            let lonAny = payload["longitude"]
+            let lat: Double? = (latAny as? Double) ?? (latAny as? NSNumber)?.doubleValue
+            let lon: Double? = (lonAny as? Double) ?? (lonAny as? NSNumber)?.doubleValue
+            let name = payload["locationName"] as? String
+            let event = PeeEvent(
+                timestamp: Date(timeIntervalSince1970: ts),
+                notes: nil,
+                quality: quality,
+                latitude: lat,
+                longitude: lon,
+                locationName: name,
+                userId: nil
+            )
+            do {
+                try repo.addEvent(event)
+                didAddAny = true
+                AnalyticsLogger.logQuickLog(mode: "no_loc", source: "widget_appintent", quality: quality)
+            } catch {
+                // keep failure silent in production
+            }
+        }
+        if didAddAny {
+            NotificationCenter.default.post(name: .eventsDidSync, object: nil)
+        }
+    }
+
+    @MainActor
+    private func handleDeepLink(_ url: URL) {
+        guard url.scheme == "peelog" else { return }
+        guard url.host == "quicklog" else { return }
+        let comps = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        let items = comps?.queryItems ?? []
+        let qualityStr = items.first(where: { $0.name == "quality" })?.value
+        guard let qualityStr, let quality = PeeQuality(rawValue: qualityStr) else {
+            return
+        }
+        Task { @MainActor in
+            let repo = container.makePeeEventRepository(modelContext: sharedModelContainer.mainContext)
+            var lat: Double? = nil
+            var lon: Double? = nil
+            var name: String? = nil
+            // Try to use current location if available
+            let locRepo = container.getLocationRepository()
+            if let info = try? await locRepo.getCurrentLocation() {
+                lat = info.data.coordinate.latitude
+                lon = info.data.coordinate.longitude
+                name = info.name
+            } else {
+                // Fallback to last stored shared location
+                let (coord, lastName) = SharedStorage.readLocation()
+                lat = coord?.latitude
+                lon = coord?.longitude
+                name = lastName
+            }
+            let event = PeeEvent(
+                timestamp: Date(),
+                notes: nil,
+                quality: quality,
+                latitude: lat,
+                longitude: lon,
+                locationName: name,
+                userId: nil
+            )
+            do {
+                try repo.addEvent(event)
+                NotificationCenter.default.post(name: .eventsDidSync, object: nil)
+                AnalyticsLogger.logQuickLog(mode: "with_loc", source: "deeplink_widget", quality: quality)
+            } catch {
+                // keep failure silent in production
+            }
         }
     }
 }
