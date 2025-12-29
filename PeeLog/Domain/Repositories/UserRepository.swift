@@ -90,11 +90,6 @@ protocol UserRepository: AnyObject {
     func syncUserToServer(_ user: User) async throws
     func loadUserFromServer() async throws -> User?
     
-    // Guest user management
-    func createGuestUser() async throws -> User
-    func isGuestUser() async -> Bool
-    func migrateGuestToAuthenticated(_ authenticatedUser: User) async throws
-    
     // Data export and import
     func exportUserData() async throws -> Data
     func importUserData(_ data: Data) async throws

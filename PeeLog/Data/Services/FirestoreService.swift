@@ -25,7 +25,6 @@ final class FirestoreService {
         let email: String?
         let displayName: String?
         let authProvider: String
-        let isGuest: Bool
         let createdAt: Date
         let updatedAt: Date
         let preferences: UserPreferences
@@ -39,7 +38,6 @@ final class FirestoreService {
             "email": localUser.email as Any,
             "displayName": localUser.displayName as Any,
             "authProvider": localUser.authProvider.rawValue,
-            "isGuest": localUser.isGuest,
             "createdAt": localUser.createdAt,
             "updatedAt": Date()
         ]
@@ -68,8 +66,7 @@ final class FirestoreService {
 
         let email = data["email"] as? String
         let displayName = data["displayName"] as? String
-        let provider = data["authProvider"] as? String ?? "guest"
-        let isGuest = data["isGuest"] as? Bool ?? true
+        let provider = data["authProvider"] as? String ?? "email"
         let createdAt = (data["createdAt"] as? Timestamp)?.dateValue() ?? Date()
         let updatedAt = (data["updatedAt"] as? Timestamp)?.dateValue() ?? Date()
 
@@ -93,7 +90,6 @@ final class FirestoreService {
             email: email,
             displayName: displayName,
             authProvider: provider,
-            isGuest: isGuest,
             createdAt: createdAt,
             updatedAt: updatedAt,
             preferences: prefs

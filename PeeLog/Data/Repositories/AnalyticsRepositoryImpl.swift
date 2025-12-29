@@ -34,7 +34,7 @@ final class AnalyticsRepositoryImpl: AnalyticsRepository {
     
     func fetchOverview(range: AnalyticsRange) async throws -> Sourced<OverviewFromServer> {
         let pr = toPeriodRange(range)
-        let uid = await AuthHelper.currentUid() ?? "guest"
+        let uid = await AuthHelper.currentUid() ?? "local"
         do {
             let resp = try await service.fetchStatsOverview(range: pr)
             try await cache.saveOverview(uid: uid, period: pr.period, startISO: pr.startDate, endISO: pr.endDate, tz: pr.timeZone, response: resp)
@@ -71,7 +71,7 @@ final class AnalyticsRepositoryImpl: AnalyticsRepository {
     
     func fetchQualityTrends(range: AnalyticsRange) async throws -> Sourced<[QualityTrendPoint]> {
         let pr = toPeriodRange(range)
-        let uid = await AuthHelper.currentUid() ?? "guest"
+        let uid = await AuthHelper.currentUid() ?? "local"
         do {
             let resp = try await service.fetchQualityTrends(range: pr)
             try await cache.saveQualityTrends(uid: uid, period: pr.period, startISO: pr.startDate, endISO: pr.endDate, tz: pr.timeZone, response: resp)
@@ -88,7 +88,7 @@ final class AnalyticsRepositoryImpl: AnalyticsRepository {
     
     func fetchHourly(range: AnalyticsRange) async throws -> Sourced<[HourlyData]> {
         let pr = toPeriodRange(range)
-        let uid = await AuthHelper.currentUid() ?? "guest"
+        let uid = await AuthHelper.currentUid() ?? "local"
         do {
             let resp = try await service.fetchHourly(range: pr)
             try await cache.saveHourly(uid: uid, period: pr.period, startISO: pr.startDate, endISO: pr.endDate, tz: pr.timeZone, response: resp)
@@ -105,7 +105,7 @@ final class AnalyticsRepositoryImpl: AnalyticsRepository {
     
     func fetchQualityDistribution(range: AnalyticsRange) async throws -> Sourced<[QualityDistribution]> {
         let pr = toPeriodRange(range)
-        let uid = await AuthHelper.currentUid() ?? "guest"
+        let uid = await AuthHelper.currentUid() ?? "local"
         func map(_ list: [RemoteAnalyticsService.QualityDistributionResponse]) -> [QualityDistribution] {
             return list.compactMap { item in
             let quality: PeeQuality
@@ -135,7 +135,7 @@ final class AnalyticsRepositoryImpl: AnalyticsRepository {
     }
     
     func fetchWeekly() async throws -> Sourced<[WeeklyData]> {
-        let uid = await AuthHelper.currentUid() ?? "guest"
+        let uid = await AuthHelper.currentUid() ?? "local"
         do {
             let resp = try await service.fetchWeekly()
             try await cache.saveWeekly(uid: uid, response: resp)
@@ -152,7 +152,7 @@ final class AnalyticsRepositoryImpl: AnalyticsRepository {
     
     func fetchInsights(range: AnalyticsRange) async throws -> Sourced<[HealthInsight]> {
         let pr = toPeriodRange(range)
-        let uid = await AuthHelper.currentUid() ?? "guest"
+        let uid = await AuthHelper.currentUid() ?? "local"
         func map(_ items: [RemoteAnalyticsService.Insight]) -> [HealthInsight] {
             return items.map { item in
             let type: HealthInsightType

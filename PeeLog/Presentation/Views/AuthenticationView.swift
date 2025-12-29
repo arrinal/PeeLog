@@ -32,16 +32,6 @@ struct AuthenticationView: View {
                 userRepository: UserRepositoryImpl(modelContext: ModelContext(try! ModelContainer(for: User.self))),
                 errorHandlingUseCase: ErrorHandlingUseCaseImpl()
             ),
-            migrateGuestDataUseCase: MigrateGuestDataUseCase(
-                userRepository: UserRepositoryImpl(modelContext: ModelContext(try! ModelContainer(for: User.self))),
-                peeEventRepository: PeeEventRepositoryImpl(modelContext: ModelContext(try! ModelContainer(for: PeeEvent.self))),
-                errorHandlingUseCase: ErrorHandlingUseCaseImpl(),
-                migrationController: MigrationControllerImpl(
-                    userRepository: UserRepositoryImpl(modelContext: ModelContext(try! ModelContainer(for: User.self))),
-                    peeEventRepository: PeeEventRepositoryImpl(modelContext: ModelContext(try! ModelContainer(for: PeeEvent.self))),
-                    firestoreService: FirestoreService()
-                )
-            ),
             errorHandlingUseCase: ErrorHandlingUseCaseImpl()
         ))
     }
@@ -86,8 +76,6 @@ struct AuthenticationView: View {
                             
                             Divider()
                                 .padding(.vertical, 10)
-                            
-                            guestModeButton
                         }
                         .padding(.horizontal, 24)
                         .padding(.vertical, 32)
@@ -105,7 +93,7 @@ struct AuthenticationView: View {
         .onChange(of: viewModel.authState) { _, newState in
             // Check if authentication was successful
             switch newState {
-            case .authenticated, .guest:
+            case .authenticated:
                 onAuthenticationSuccess?()
             default:
                 break
@@ -117,7 +105,7 @@ struct AuthenticationView: View {
         .sheet(isPresented: $viewModel.showEmailVerification) {
             emailVerificationSheet
         }
-        .interactiveDismissDisabled(viewModel.isLoading || viewModel.showMigrationDialog)
+        .interactiveDismissDisabled(viewModel.isLoading)
         .appAlert(
             isPresented: $viewModel.showError,
             title: "Something went wrong",
@@ -125,19 +113,7 @@ struct AuthenticationView: View {
             iconSystemName: "exclamationmark.triangle.fill",
             primaryTitle: "OK"
         )
-        .appConfirm(
-            isPresented: $viewModel.showMigrationDialog,
-            title: "Unsynced data detected",
-            message: "We found local data that isn't synced. Would you like to merge it with your cloud data?",
-            iconSystemName: "arrow.triangle.2.circlepath.circle.fill",
-            primaryTitle: "Merge local and cloud data",
-            primaryDestructive: false,
-            onPrimary: { Task { await viewModel.mergeLocalWithCloudAfterLogin() } },
-            secondaryTitle: "Use cloud only (replace local)",
-            secondaryDestructive: true,
-            onSecondary: { Task { await viewModel.useCloudOnlyAfterLogin() } },
-            allowsClose: false
-        )
+        // Legacy migration removed
 
     }
     
@@ -472,38 +448,6 @@ struct AuthenticationView: View {
             }
             .font(.footnote)
             .foregroundColor(.blue)
-        }
-    }
-    
-    @ViewBuilder
-    private var guestModeButton: some View {
-        VStack(spacing: 12) {
-            Text("Try without signing up")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-            
-            Button(action: {
-                Task {
-                    await viewModel.signInAsGuest()
-                }
-            }) {
-                HStack {
-                    Image(systemName: "person.circle")
-                    Text("Continue as Guest")
-                        .fontWeight(.medium)
-                }
-                .frame(maxWidth: .infinity)
-                .padding()
-                .background(Color.gray.opacity(0.2))
-                .foregroundColor(.primary)
-                .cornerRadius(8)
-            }
-            .disabled(viewModel.isLoading)
-            
-            Text("Note: Guest data can be migrated to an account later")
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
         }
     }
 }

@@ -20,9 +20,6 @@ final class UserRepositoryImpl: UserRepository {
     private let syncStatusSubject = CurrentValueSubject<SyncStatus, Never>(.idle)
     private let isLoadingSubject = CurrentValueSubject<Bool, Never>(false)
     
-    // Flag to force guest user priority during sign-out transitions
-    private var prioritizeGuest = false
-    
     init(modelContext: ModelContext) {
         self.modelContext = modelContext
     }
@@ -44,28 +41,10 @@ final class UserRepositoryImpl: UserRepository {
     // MARK: - Local User Management
     
     func getCurrentUser() async -> User? {
-        // During sign-out transitions, prioritize guest users to prevent 
-        // returning stale authenticated users
-        if prioritizeGuest {
-            if let guestUser = await getGuestUser() {
-                currentUserSubject.send(guestUser)
-                return guestUser
-            }
-            // No guest user found, reset flag and continue normal logic
-            prioritizeGuest = false
-        }
-        
-        // Normal priority: authenticated users first, then guest users
         if let authenticatedUser = await getAuthenticatedUser() {
             currentUserSubject.send(authenticatedUser)
             return authenticatedUser
         }
-        
-        if let guestUser = await getGuestUser() {
-            currentUserSubject.send(guestUser)
-            return guestUser
-        }
-        
         return nil
     }
     
@@ -131,54 +110,13 @@ final class UserRepositoryImpl: UserRepository {
         defer { isLoadingSubject.send(false) }
         
         do {
-            // Reset current user immediately if it was an authenticated user
-            if let currentUser = currentUserSubject.value, !currentUser.isGuest {
-                currentUserSubject.send(nil)
-            }
-            
-            // Set flag to prioritize guest users during the transition period
-            prioritizeGuest = true
-            
-            // Get all authenticated users (non-guest) in a single transaction
-            let descriptor = FetchDescriptor<User>(
-                predicate: #Predicate { $0.isGuest == false }
-            )
-            
-            // Perform deletion in a transaction-like manner
-            let authenticatedUsers = try modelContext.fetch(descriptor)
-            
-            // If no authenticated users, we're done
-            guard !authenticatedUsers.isEmpty else {
-                return
-            }
-            
-            // Delete all authenticated users in one batch
-            for user in authenticatedUsers {
+            let allUsers = try modelContext.fetch(FetchDescriptor<User>())
+            for user in allUsers {
                 modelContext.delete(user)
             }
-            
-            // Force save with error handling
-            do {
-                try modelContext.save()
-            } catch {
-                // If save fails, rollback by not completing the operation
-                throw UserRepositoryError.saveFailed("Failed to save changes while clearing authenticated users: \(error.localizedDescription)")
-            }
-            
-            // Verification step - ensure clearing was successful
-            let verificationDescriptor = FetchDescriptor<User>(
-                predicate: #Predicate { $0.isGuest == false }
-            )
-            let remainingUsers = try modelContext.fetch(verificationDescriptor)
-            
-            if !remainingUsers.isEmpty {
-                // This should not happen, but if it does, we have a serious consistency issue
-                throw UserRepositoryError.saveFailed("Failed to clear authenticated users completely. \(remainingUsers.count) users remain.")
-            }
-            
+            try modelContext.save()
+            currentUserSubject.send(nil)
         } catch {
-            // Reset flag on error
-            prioritizeGuest = false
             // Ensure we re-throw with proper error context
             if error is UserRepositoryError {
                 throw error
@@ -233,8 +171,7 @@ final class UserRepositoryImpl: UserRepository {
             throw UserRepositoryError.userNotFound
         }
         
-        // Skip sync for guest users
-        if user.isGuest || !user.preferences.syncEnabled {
+        if !user.preferences.syncEnabled {
             return
         }
         
@@ -253,8 +190,7 @@ final class UserRepositoryImpl: UserRepository {
     }
     
     func syncUserToServer(_ user: User) async throws {
-        // Skip sync for guest users
-        if user.isGuest || !user.preferences.syncEnabled {
+        if !user.preferences.syncEnabled {
             return
         }
         
@@ -308,48 +244,6 @@ final class UserRepositoryImpl: UserRepository {
             syncStatusSubject.send(.error(error.localizedDescription))
             throw UserRepositoryError.syncFailed(error.localizedDescription)
         }
-    }
-    
-    // MARK: - Guest User Management
-    
-    func createGuestUser() async throws -> User {
-        // Check if guest user already exists
-        if let existingGuest = await getGuestUser() {
-            // Reset the prioritize flag since we found an existing guest
-            prioritizeGuest = false
-            return existingGuest
-        }
-        
-        let guestUser = User.createGuest()
-        try await saveUser(guestUser)
-        
-        // Reset the prioritize flag after creating new guest user
-        prioritizeGuest = false
-        return guestUser
-    }
-    
-    func isGuestUser() async -> Bool {
-        guard let user = await getCurrentUser() else {
-            return false
-        }
-        return user.isGuest
-    }
-    
-    func migrateGuestToAuthenticated(_ authenticatedUser: User) async throws {
-        // Get current guest user
-        guard let guestUser = await getGuestUser() else {
-            throw UserRepositoryError.userNotFound
-        }
-        
-        // Preserve guest preferences
-        let guestPreferences = guestUser.preferences
-        authenticatedUser.updatePreferences(guestPreferences)
-        
-        // Save authenticated user
-        try await saveUser(authenticatedUser)
-        
-        // Delete guest user
-        try await deleteUser(guestUser)
     }
     
     // MARK: - Data Export and Import
@@ -424,23 +318,8 @@ final class UserRepositoryImpl: UserRepository {
     
     private func getAuthenticatedUser() async -> User? {
         let descriptor = FetchDescriptor<User>(
-            predicate: #Predicate { $0.isGuest == false },
             sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
         )
-        
-        do {
-            let users = try modelContext.fetch(descriptor)
-            return users.first
-        } catch {
-            return nil
-        }
-    }
-    
-    private func getGuestUser() async -> User? {
-        let descriptor = FetchDescriptor<User>(
-            predicate: #Predicate { $0.isGuest == true }
-        )
-        
         do {
             let users = try modelContext.fetch(descriptor)
             return users.first

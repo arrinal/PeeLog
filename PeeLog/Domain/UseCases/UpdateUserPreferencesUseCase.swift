@@ -41,10 +41,8 @@ final class UpdateUserPreferencesUseCase: UpdateUserPreferencesUseCaseProtocol {
             // Save updated user
             try await userRepository.updateUser(user)
             
-            // Sync to server if not guest
-            if !user.isGuest {
-                try? await userRepository.syncUserToServer(user)
-            }
+            // Sync to server
+            try? await userRepository.syncUserToServer(user)
             
             return user
             

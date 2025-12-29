@@ -150,11 +150,11 @@ final class PeeEventRepositoryDummy: PeeEventRepository {
 
 @MainActor
 final class UserRepositoryDummy: UserRepository {
-    var currentUser: AnyPublisher<User?, Never> { Just(User.createGuest()).eraseToAnyPublisher() }
+    var currentUser: AnyPublisher<User?, Never> { Just(User.createEmailUser(email: "test@example.com")).eraseToAnyPublisher() }
     var syncStatus: AnyPublisher<SyncStatus, Never> { Just(.idle).eraseToAnyPublisher() }
     var isLoading: AnyPublisher<Bool, Never> { Just(false).eraseToAnyPublisher() }
 
-    func getCurrentUser() async -> User? { User.createGuest() }
+    func getCurrentUser() async -> User? { User.createEmailUser(email: "test@example.com") }
     func saveUser(_ user: User) async throws {}
     func updateUser(_ user: User) async throws {}
     func deleteUser(_ user: User) async throws {}
@@ -167,9 +167,6 @@ final class UserRepositoryDummy: UserRepository {
     func syncUserData() async throws {}
     func syncUserToServer(_ user: User) async throws {}
     func loadUserFromServer() async throws -> User? { nil }
-    func createGuestUser() async throws -> User { User.createGuest() }
-    func isGuestUser() async -> Bool { true }
-    func migrateGuestToAuthenticated(_ authenticatedUser: User) async throws {}
     func exportUserData() async throws -> Data { Data() }
     func importUserData(_ data: Data) async throws {}
     func getUserById(_ id: UUID) async -> User? { nil }

@@ -36,23 +36,14 @@ class PeeEventRepositoryImpl: PeeEventRepository {
         // Ensure the event is associated with the current local user for offline segregation
         // If userId is empty and we can fetch a current user id, set it.
         if event.userId == nil {
-            // Best-effort: load latest non-guest first, else guest
-            let userDescriptor = FetchDescriptor<User>(
-                predicate: #Predicate { $0.isGuest == false },
+            // Associate with the most recently updated local user if available
+            let anyUserDescriptor = FetchDescriptor<User>(
                 sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
             )
-            if let user = try? modelContext.fetch(userDescriptor).first {
+            if let user = try? modelContext.fetch(anyUserDescriptor).first {
                 event.userId = user.id
-            } else {
-                let guestDescriptor = FetchDescriptor<User>(
-                    predicate: #Predicate { $0.isGuest == true },
-                    sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
-                )
-                if let guest = try? modelContext.fetch(guestDescriptor).first {
-                    event.userId = guest.id
-                }
+                try modelContext.save()
             }
-            try modelContext.save()
         }
     }
     

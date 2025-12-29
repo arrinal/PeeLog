@@ -88,6 +88,9 @@ struct PeeLogApp: App {
 extension PeeLogApp {
     @MainActor
     private func drainQuickLogQueue() {
+        // Require an authenticated user before draining queued widget logs
+        let anyUser = try? sharedModelContainer.mainContext.fetch(FetchDescriptor<User>()).first
+        guard anyUser != nil else { return }
         let payloads = QuickLogQueue.drain()
         guard !payloads.isEmpty else { return }
         let repo = container.makePeeEventRepository(modelContext: sharedModelContainer.mainContext)
@@ -130,6 +133,9 @@ extension PeeLogApp {
     private func handleDeepLink(_ url: URL) {
         guard url.scheme == "peelog" else { return }
         guard url.host == "quicklog" else { return }
+        // Require an authenticated user before handling quicklog deeplink
+        let anyUser = try? sharedModelContainer.mainContext.fetch(FetchDescriptor<User>()).first
+        guard anyUser != nil else { return }
         let comps = URLComponents(url: url, resolvingAgainstBaseURL: false)
         let items = comps?.queryItems ?? []
         let qualityStr = items.first(where: { $0.name == "quality" })?.value

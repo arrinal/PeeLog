@@ -28,7 +28,6 @@ protocol AuthenticateUserUseCaseProtocol {
     func signInWithEmail(_ email: String, password: String) async throws -> AuthResult
     func registerWithEmail(_ email: String, password: String, displayName: String?) async throws -> AuthResult
     func signInWithApple() async throws -> AuthResult
-    func signInAsGuest() async throws -> User
     func signOut() async throws
     func deleteAccount() async throws
     func refreshToken() async throws -> String
@@ -180,25 +179,6 @@ final class AuthenticateUserUseCase: AuthenticateUserUseCaseProtocol {
         }
     }
     
-    // MARK: - Guest Mode
-    
-    func signInAsGuest() async throws -> User {
-        do {
-            // Create guest user
-            let guestUser = try await userRepository.createGuestUser()
-            
-            // Update auth state to guest
-            authRepository.updateAuthState(.guest(guestUser))
-            
-            return guestUser
-            
-        } catch {
-            let context = ErrorContextHelper.createGuestSignInContext()
-            let result = errorHandlingUseCase.handleError(error, context: context)
-            throw AuthError.unknown(result.userMessage)
-        }
-    }
-    
     // MARK: - Sign Out & Account Management
     
     func signOut() async throws {
@@ -209,8 +189,7 @@ final class AuthenticateUserUseCase: AuthenticateUserUseCaseProtocol {
             // Sign out from auth repository (this will trigger handleFirebaseSignOut)
             try await authRepository.signOut()
             
-            // DON'T override the auth state here - let handleFirebaseSignOut determine
-            // the correct state based on whether guest users exist
+            // DON'T override the auth state here - observer will set unauthenticated
             
         } catch {
             let context = ErrorContextHelper.createSignOutContext()

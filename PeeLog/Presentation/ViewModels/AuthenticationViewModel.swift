@@ -14,8 +14,6 @@ final class AuthenticationViewModel: ObservableObject {
     // MARK: - Use Cases
     private let authenticateUserUseCase: AuthenticateUserUseCaseProtocol
     private let createUserProfileUseCase: CreateUserProfileUseCaseProtocol
-    private let migrateGuestDataUseCase: MigrateGuestDataUseCaseProtocol
-    private var skipMigrationUseCase: SkipMigrationUseCaseProtocol?
     private let errorHandlingUseCase: ErrorHandlingUseCase
     private var syncControl: SyncControl?
     
@@ -48,13 +46,6 @@ final class AuthenticationViewModel: ObservableObject {
     @Published var resendCountdown = 0
     private var temporaryPassword = "" // Store password temporarily for auto-login after verification
     
-    // MARK: - Guest Migration
-    @Published var guestUserToMigrate: User?
-    @Published var showMigrationDialog = false
-    @Published var isMigrating = false
-    private var pendingAuthenticatedUser: User?
-    private var preLoginHasLocalGuestData = false
-    
     // MARK: - Validation Properties
     @Published var emailError: String?
     @Published var passwordError: String?
@@ -65,12 +56,10 @@ final class AuthenticationViewModel: ObservableObject {
     init(
         authenticateUserUseCase: AuthenticateUserUseCaseProtocol,
         createUserProfileUseCase: CreateUserProfileUseCaseProtocol,
-        migrateGuestDataUseCase: MigrateGuestDataUseCaseProtocol,
         errorHandlingUseCase: ErrorHandlingUseCase
     ) {
         self.authenticateUserUseCase = authenticateUserUseCase
         self.createUserProfileUseCase = createUserProfileUseCase
-        self.migrateGuestDataUseCase = migrateGuestDataUseCase
         self.errorHandlingUseCase = errorHandlingUseCase
         
         setupValidation()
@@ -80,9 +69,7 @@ final class AuthenticationViewModel: ObservableObject {
         self.syncControl = syncControl
     }
 
-    func setSkipMigrationUseCase(_ useCase: SkipMigrationUseCaseProtocol) {
-        self.skipMigrationUseCase = useCase
-    }
+    // Skip migration use case removed
     
     // MARK: - Validation Setup
     
@@ -123,25 +110,10 @@ final class AuthenticationViewModel: ObservableObject {
         clearErrors()
         
         do {
-            // Preflight: capture guest and whether local data existed BEFORE login
-            if let guest = await getCurrentGuestUser() {
-                guestUserToMigrate = guest
-                let hasLocal = await migrateGuestDataUseCase.canMigrateData(from: guest)
-                preLoginHasLocalGuestData = hasLocal
-                if hasLocal { syncControl?.isBlocked = true }
-            } else {
-                preLoginHasLocalGuestData = false
-            }
-            // Capture current guest (if any) before authenticating
-            if guestUserToMigrate == nil {
-                guestUserToMigrate = await getCurrentGuestUser()
-            }
             let authResult = try await authenticateUserUseCase.signInWithEmail(email, password: password)
-            // Defer finalization until merge decision (if needed)
-            pendingAuthenticatedUser = authResult.user
             currentUser = authResult.user
             clearForm()
-            await handlePostLoginSuccess()
+            finalizeAuthentication(with: authResult.user)
         } catch {
             handleError(error)
         }
@@ -156,11 +128,6 @@ final class AuthenticationViewModel: ObservableObject {
         clearErrors()
         
         do {
-            // Record guest user if exists, but do NOT show dialog yet
-            if guestUserToMigrate == nil {
-                guestUserToMigrate = await getCurrentGuestUser()
-            }
-            
             let _ = try await authenticateUserUseCase.registerWithEmail(
                 email,
                 password: password,
@@ -183,44 +150,14 @@ final class AuthenticationViewModel: ObservableObject {
         isLoading = false
     }
     
-    func signInAsGuest() async {
-        isLoading = true
-        clearErrors()
-        
-        do {
-            let guestUser = try await authenticateUserUseCase.signInAsGuest()
-            authState = .guest(guestUser)
-            currentUser = guestUser
-        } catch {
-            handleError(error)
-        }
-        
-        isLoading = false
-    }
-    
     func signInWithApple() async {
         isLoading = true
         clearErrors()
         
         do {
-            // Preflight: capture guest and whether local data existed BEFORE login
-            if let guest = await getCurrentGuestUser() {
-                guestUserToMigrate = guest
-                let hasLocal = await migrateGuestDataUseCase.canMigrateData(from: guest)
-                preLoginHasLocalGuestData = hasLocal
-                if hasLocal { syncControl?.isBlocked = true }
-            } else {
-                preLoginHasLocalGuestData = false
-            }
-            // Record guest user if exists, but do NOT show dialog yet
-            if guestUserToMigrate == nil {
-                guestUserToMigrate = await getCurrentGuestUser()
-            }
-            
             let authResult = try await authenticateUserUseCase.signInWithApple()
-            pendingAuthenticatedUser = authResult.user
             currentUser = authResult.user
-            await handlePostLoginSuccess()
+            finalizeAuthentication(with: authResult.user)
         } catch {
             handleError(error)
         }
@@ -313,24 +250,10 @@ final class AuthenticationViewModel: ObservableObject {
     private func signInAfterVerification() async {
         // Sign in the user after email verification
         do {
-            // Preflight: capture whether local data existed BEFORE auto-login after verify
-            var guestMaybe = guestUserToMigrate
-            if guestMaybe == nil {
-                guestMaybe = await getCurrentGuestUser()
-            }
-            if let guest = guestMaybe {
-                guestUserToMigrate = guest
-                let hasLocal = await migrateGuestDataUseCase.canMigrateData(from: guest)
-                preLoginHasLocalGuestData = hasLocal
-                if hasLocal { syncControl?.isBlocked = true }
-            } else {
-                preLoginHasLocalGuestData = false
-            }
             let authResult = try await authenticateUserUseCase.signInWithEmail(verificationEmail, password: temporaryPassword)
-            pendingAuthenticatedUser = authResult.user
             currentUser = authResult.user
             showEmailVerification = false
-            await handlePostLoginSuccess()
+            finalizeAuthentication(with: authResult.user)
             resetEmailVerificationForm()
         } catch {
             verificationMessage = "Failed to sign in after verification. Please try signing in manually."
@@ -358,50 +281,6 @@ final class AuthenticationViewModel: ObservableObject {
         resendCountdown = 0
         showEmailVerification = false
         temporaryPassword = "" // Clear temporary password for security
-        guestUserToMigrate = nil // Clear pending migration
-    }
-    
-    // MARK: - Guest Migration
-    
-    // MARK: - Post-login merge decision API (new wording)
-    func mergeLocalWithCloudAfterLogin() async {
-        guard let pendingUser = pendingAuthenticatedUser, let guestUser = guestUserToMigrate else {
-            // If we have no guest data, just finalize
-            finalizeAuthentication()
-            return
-        }
-        isLoading = true
-        showMigrationDialog = false
-        do {
-            syncControl?.isBlocked = true
-            // Upload local guest events to cloud, then pull snapshot and replace local
-            try await migrateGuestDataUseCase.migrateGuestData(guestUser: guestUser, to: pendingUser)
-            guestUserToMigrate = nil
-            finalizeAuthentication()
-        } catch {
-            handleError(error)
-        }
-        syncControl?.isBlocked = false
-        isLoading = false
-    }
-    
-    func useCloudOnlyAfterLogin() async {
-        guard let pendingUser = pendingAuthenticatedUser else {
-            finalizeAuthentication()
-            return
-        }
-        isLoading = true
-        showMigrationDialog = false
-        do {
-            syncControl?.isBlocked = true
-            try await skipMigrationUseCase?.skipMigration(for: pendingUser)
-            guestUserToMigrate = nil
-            finalizeAuthentication()
-        } catch {
-            handleError(error)
-        }
-        syncControl?.isBlocked = false
-        isLoading = false
     }
     
     // MARK: - Form Management
@@ -530,31 +409,11 @@ final class AuthenticationViewModel: ObservableObject {
     }
     
     // MARK: - Helpers (post-login)
-    private func handlePostLoginSuccess() async {
-        // If guest existed and local data existed BEFORE login, present merge dialog
-        if guestUserToMigrate != nil && preLoginHasLocalGuestData {
-            showMigrationDialog = true
-            return
-        }
-        // Otherwise finalize immediately
-        finalizeAuthentication()
-    }
-    
-    private func finalizeAuthentication() {
-        if let user = pendingAuthenticatedUser {
-            authState = .authenticated(user)
-        }
-        // Unblock sync if it was blocked but we are finalizing without merge dialog
+    private func finalizeAuthentication(with user: User) {
+        authState = .authenticated(user)
         if syncControl?.isBlocked == true {
             syncControl?.isBlocked = false
             NotificationCenter.default.post(name: .requestInitialFullSync, object: nil)
         }
-        preLoginHasLocalGuestData = false
-        pendingAuthenticatedUser = nil
-    }
-    
-    private func getCurrentGuestUser() async -> User? {
-        let currentUser = await authenticateUserUseCase.getCurrentUser()
-        return currentUser?.isGuest == true ? currentUser : nil
     }
 } 

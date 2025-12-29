@@ -12,7 +12,7 @@ import SwiftData
 enum AuthProvider: String, Codable, CaseIterable {
     case apple = "apple"
     case email = "email"
-    case guest = "guest"
+    case unknown = "unknown"
     
     var displayText: String {
         switch self {
@@ -20,9 +20,20 @@ enum AuthProvider: String, Codable, CaseIterable {
             return "Apple ID"
         case .email:
             return "Email Account"
-        case .guest:
-            return "Guest Mode"
+        case .unknown:
+            return "Unknown"
         }
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let value = try container.decode(String.self)
+        self = AuthProvider(rawValue: value) ?? .unknown
+    }
+    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(self.rawValue)
     }
 }
 
@@ -91,7 +102,6 @@ final class User: Codable {
     var updatedAt: Date
     var authProvider: AuthProvider
     var appleUserId: String?
-    var isGuest: Bool
     
     // User Preferences (stored as encoded data in SwiftData)
     private var preferencesData: Data
@@ -129,7 +139,6 @@ final class User: Codable {
         self.updatedAt = Date()
         self.authProvider = authProvider
         self.appleUserId = appleUserId
-        self.isGuest = authProvider == .guest
         
         // Encode preferences
         do {
@@ -141,15 +150,6 @@ final class User: Codable {
     }
     
     // MARK: - Convenience Methods
-    
-    /// Creates a guest user
-    static func createGuest() -> User {
-        return User(
-            displayName: "Guest User",
-            authProvider: .guest,
-            preferences: UserPreferences.default
-        )
-    }
     
     /// Creates a user from email/password registration
     static func createEmailUser(email: String, displayName: String? = nil) -> User {
@@ -192,24 +192,13 @@ final class User: Codable {
         updatedAt = Date()
     }
     
-    /// Migrates guest user to authenticated user
-    func migrateToAuthenticated(email: String?, authProvider: AuthProvider, appleUserId: String? = nil) {
-        self.email = email
-        self.authProvider = authProvider
-        self.appleUserId = appleUserId
-        self.isGuest = false
-        self.updatedAt = Date()
-        
-        if displayName == "Guest User" {
-            displayName = email?.components(separatedBy: "@").first
-        }
-    }
+    
     
     // MARK: - Codable Implementation
     
     enum CodingKeys: String, CodingKey {
         case id, email, displayName, createdAt, updatedAt
-        case authProvider, appleUserId, isGuest, preferences
+        case authProvider, appleUserId, preferences
     }
     
     func encode(to encoder: Encoder) throws {
@@ -221,7 +210,6 @@ final class User: Codable {
         try container.encode(updatedAt, forKey: .updatedAt)
         try container.encode(authProvider, forKey: .authProvider)
         try container.encodeIfPresent(appleUserId, forKey: .appleUserId)
-        try container.encode(isGuest, forKey: .isGuest)
         try container.encode(preferences, forKey: .preferences)
     }
     
@@ -235,7 +223,6 @@ final class User: Codable {
         self.updatedAt = try container.decode(Date.self, forKey: .updatedAt)
         self.authProvider = try container.decode(AuthProvider.self, forKey: .authProvider)
         self.appleUserId = try container.decodeIfPresent(String.self, forKey: .appleUserId)
-        self.isGuest = try container.decode(Bool.self, forKey: .isGuest)
         
         let decodedPreferences = try container.decode(UserPreferences.self, forKey: .preferences)
         self.preferencesData = try JSONEncoder().encode(decodedPreferences)
@@ -254,7 +241,7 @@ extension User {
             return email.components(separatedBy: "@").first ?? "User"
         }
         
-        return authProvider == .guest ? "Guest User" : "User"
+        return "User"
     }
     
     var initials: String {

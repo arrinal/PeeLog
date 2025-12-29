@@ -85,16 +85,11 @@ final class AuthRepositoryImpl: AuthRepository {
     
     private func checkExistingAuthState() {
         Task {
-                    // Check if there's a current Firebase user
-        if firebaseAuthService.getCurrentUser() != nil {
-            await handleFirebaseSignIn()
-        } else {
-                // Check for local guest user
-                if let guestUser = await getLocalGuestUser() {
-                    updateAuthState(.guest(guestUser))
-                } else {
-                    updateAuthState(.unauthenticated)
-                }
+            // Check if there's a current Firebase user
+            if firebaseAuthService.getCurrentUser() != nil {
+                await handleFirebaseSignIn()
+            } else {
+                updateAuthState(.unauthenticated)
             }
         }
     }
@@ -189,13 +184,7 @@ final class AuthRepositoryImpl: AuthRepository {
     private func handleFirebaseSignOut() async {
         // Clear current user first
         currentUserSubject.send(nil)
-        
-        // Check for local guest user
-        if let guestUser = await getLocalGuestUser() {
-            updateAuthState(.guest(guestUser))
-        } else {
-            updateAuthState(.unauthenticated)
-        }
+        updateAuthState(.unauthenticated)
     }
     
     // MARK: - Authentication Methods
@@ -330,29 +319,6 @@ final class AuthRepositoryImpl: AuthRepository {
         }
     }
     
-    func signInAsGuest() async throws -> User {
-        isLoadingSubject.send(true)
-        defer { isLoadingSubject.send(false) }
-        
-        do {
-            // Check if guest user already exists
-            if let existingGuest = await getLocalGuestUser() {
-                updateAuthState(.guest(existingGuest))
-                return existingGuest
-            }
-            
-            // Create new guest user
-            let guestUser = User.createGuest()
-            try await saveUserLocally(guestUser)
-            
-            updateAuthState(.guest(guestUser))
-            return guestUser
-            
-        } catch {
-            throw AuthError.unknown(error.localizedDescription)
-        }
-    }
-    
     func signOut() async throws {
         do {
             // Set flag to prevent Firebase observer interference
@@ -390,10 +356,8 @@ final class AuthRepositoryImpl: AuthRepository {
         }
         
         do {
-            // Delete from Firebase if not guest
-            if !currentUser.isGuest {
-                try await firebaseAuthService.deleteAccount()
-            }
+            // Delete from Firebase account
+            try await firebaseAuthService.deleteAccount()
             
             // Delete from local storage
             try await deleteUserLocally(currentUser)
@@ -495,14 +459,6 @@ final class AuthRepositoryImpl: AuthRepository {
         return try await firebaseAuthService.getIDToken()
     }
     
-    // MARK: - Guest Data Migration
-    
-    func migrateGuestData(to authenticatedUser: User) async throws {
-        // This will be handled by MigrateGuestDataUseCase
-        // Just update the auth state here
-        updateAuthState(.authenticated(authenticatedUser))
-    }
-    
     // MARK: - User State Management
     
     func getCurrentUser() async -> User? {
@@ -514,19 +470,9 @@ final class AuthRepositoryImpl: AuthRepository {
     }
     
     func isUserAuthenticated() async -> Bool {
-        // Check if we have a current user (guest or authenticated)
-        if let currentUser = currentUserSubject.value {
-            // For guest users, they are considered "authenticated" for local purposes
-            if currentUser.isGuest {
-                return true
-            }
-            
-            // For real users, check if Firebase session is still valid
-            return await firebaseAuthService.isTokenValid()
-        }
-        
-        // No user at all
-        return false
+        // Only real authenticated users are considered authenticated
+        guard currentUserSubject.value != nil else { return false }
+        return await firebaseAuthService.isTokenValid()
     }
     
     // MARK: - Validation
@@ -573,19 +519,6 @@ final class AuthRepositoryImpl: AuthRepository {
         
         let descriptor = FetchDescriptor<User>(
             predicate: #Predicate { $0.email == email }
-        )
-        
-        do {
-            let users = try modelContext.fetch(descriptor)
-            return users.first
-        } catch {
-            return nil
-        }
-    }
-    
-    private func getLocalGuestUser() async -> User? {
-        let descriptor = FetchDescriptor<User>(
-            predicate: #Predicate { $0.isGuest == true }
         )
         
         do {
