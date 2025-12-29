@@ -48,10 +48,6 @@ struct ErrorContextHelper {
         )
     }
     
-    static func createGuestSignInContext() -> ErrorContext {
-        return createAuthenticationContext(operation: "Guest Sign In", userAction: "User guest sign in")
-    }
-    
     static func createSignOutContext() -> ErrorContext {
         return createAuthenticationContext(operation: "Sign Out", userAction: "User sign out")
     }
@@ -100,10 +96,6 @@ struct ErrorContextHelper {
             operation: operation,
             userAction: userAction ?? "User data operation"
         )
-    }
-    
-    static func createMigrateGuestDataContext() -> ErrorContext {
-        return createDataManagementContext(operation: "Migrate Guest Data", userAction: "Guest data migration")
     }
     
     // MARK: - Location Context Creation

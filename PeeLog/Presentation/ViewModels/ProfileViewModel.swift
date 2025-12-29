@@ -42,7 +42,6 @@ final class ProfileViewModel: ObservableObject {
     @Published var showDeleteAccountAlert = false
     @Published var showSignOutAlert = false
     @Published var showSignOutConfirmation = false
-    @Published var showAuthenticationView = false
     @Published var showDataExportSheet = false
     @Published var exportedData: Data?
     @Published var isExporting = false
@@ -95,15 +94,8 @@ final class ProfileViewModel: ObservableObject {
                 // During normal operation, we want to be careful about updates
                 // to prevent race conditions where old authenticated users reappear
                 if let currentUser = self.currentUser {
-                    // We have a current user - only update if:
-                    // 1. The new user is different (by ID)
-                    // 2. OR the new user is a guest and current user is authenticated (sign-out scenario)
-                    // 3. OR the new user is authenticated and current user is guest (sign-in scenario)
-                    let shouldUpdate = (currentUser.id != user?.id) ||
-                                     (user?.isGuest == true && !currentUser.isGuest) ||
-                                     (user?.isGuest == false && currentUser.isGuest)
-                    
-                    if shouldUpdate {
+                    // Update if the user identity changed
+                    if currentUser.id != user?.id {
                         self.currentUser = user
                         self.updatePreferencesFromUser()
                     }
@@ -212,26 +204,9 @@ final class ProfileViewModel: ObservableObject {
         let user = await userRepository.getCurrentUser()
         
         await MainActor.run {
-            // If no user found, create a guest user
             if user == nil {
-                Task {
-                    do {
-                        let guestUser = try await userRepository.createGuestUser()
-                        await MainActor.run {
-                            // Only update if we're not signing out
-                            if !isSigningOut {
-                                currentUser = guestUser
-                                updatePreferencesFromUser()
-                            }
-                            isLoading = false
-                        }
-                    } catch {
-                        await MainActor.run {
-                            handleError(error)
-                            isLoading = false
-                        }
-                    }
-                }
+                // No user; repository will eventually push unauthenticated state
+                isLoading = false
             } else {
                 // Only update current user if not signing out and it's actually different
                 if !isSigningOut && currentUser?.id != user?.id {
@@ -351,7 +326,7 @@ final class ProfileViewModel: ObservableObject {
     // MARK: - Data Management
     
     func syncData() async {
-        guard let user = currentUser, !user.isGuest else { return }
+        guard currentUser != nil else { return }
         
         do {
             try await userRepository.syncUserData()
@@ -422,24 +397,8 @@ final class ProfileViewModel: ObservableObject {
             do { try peeEventRepository.clearAllEvents() } catch { /* no-op */ }
             // Notify that store reset completed so views can re-query safely
             NotificationCenter.default.post(name: .eventsStoreDidReset, object: nil)
-
-            // Create a fresh guest user
-            let guestUser = try await userRepository.createGuestUser()
-            await MainActor.run {
-                currentUser = guestUser
-                updatePreferencesFromUser()
-            }
         } catch {
-            // If sign out fails, still try to create a guest user
-            do {
-                let guestUser = try await userRepository.createGuestUser()
-                await MainActor.run {
-                    currentUser = guestUser
-                    updatePreferencesFromUser()
-                }
-            } catch {
-                handleError(error)
-            }
+            handleError(error)
         }
         
         await MainActor.run {
@@ -453,13 +412,7 @@ final class ProfileViewModel: ObservableObject {
         
         do {
             try await authenticateUserUseCase.deleteAccount()
-            
-            // Create a guest user immediately after deleting account
-            // to avoid showing confusing "Not signed in" state
-            let guestUser = User.createGuest()
-            try await userRepository.saveUser(guestUser)
-            currentUser = guestUser
-            updatePreferencesFromUser()
+            currentUser = nil
         } catch {
             handleError(error)
         }
@@ -481,10 +434,6 @@ final class ProfileViewModel: ObservableObject {
         currentUser?.email
     }
     
-    var isGuestUser: Bool {
-        currentUser?.isGuest ?? false
-    }
-    
     var authProviderDisplayName: String {
         currentUser?.authProvider.displayText ?? "Unknown"
     }
@@ -499,7 +448,7 @@ final class ProfileViewModel: ObservableObject {
     
     var canSync: Bool {
         guard let user = currentUser else { return false }
-        return !user.isGuest && user.preferences.syncEnabled
+        return user.preferences.syncEnabled
     }
     
     var syncStatusText: String {

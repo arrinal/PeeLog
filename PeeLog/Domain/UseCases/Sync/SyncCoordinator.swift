@@ -44,7 +44,7 @@ final class SyncCoordinator {
         syncControl.isBlocked = true
         defer { syncControl.isBlocked = false }
         let user = await userRepository.getCurrentUser()
-        guard let user = user, !user.isGuest else { return }
+        guard user != nil else { return }
         
         // Upload local (all for now; could be optimized using metadata)
         let localEvents = peeEventRepository.getAllEvents()
@@ -78,7 +78,7 @@ final class SyncCoordinator {
         guard let uid = Auth.auth().currentUser?.uid else { return }
         if syncControl.isBlocked { return }
         let user = await userRepository.getCurrentUser()
-        guard let user = user, !user.isGuest else { return }
+        guard user != nil else { return }
         try await firestoreService.upsertEvents(uid: uid, events: [event])
         NotificationCenter.default.post(name: .eventsDidSync, object: nil)
     }
@@ -87,7 +87,7 @@ final class SyncCoordinator {
         guard let uid = Auth.auth().currentUser?.uid else { return }
         if syncControl.isBlocked { return }
         let user = await userRepository.getCurrentUser()
-        guard let user = user, !user.isGuest else { return }
+        guard user != nil else { return }
         try await firestoreService.deleteEvent(uid: uid, eventId: event.id)
         NotificationCenter.default.post(name: .eventsDidSync, object: nil)
     }

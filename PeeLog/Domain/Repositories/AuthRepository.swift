@@ -77,12 +77,11 @@ enum AuthState: Equatable {
     case unauthenticated
     case authenticating
     case authenticated(User)
-    case guest(User)
     case error(AuthError)
     
     var user: User? {
         switch self {
-        case .authenticated(let user), .guest(let user):
+        case .authenticated(let user):
             return user
         default:
             return nil
@@ -91,18 +90,11 @@ enum AuthState: Equatable {
     
     var isAuthenticated: Bool {
         switch self {
-        case .authenticated, .guest:
+        case .authenticated:
             return true
         default:
             return false
         }
-    }
-    
-    var isGuest: Bool {
-        if case .guest = self {
-            return true
-        }
-        return false
     }
 }
 
@@ -119,7 +111,6 @@ protocol AuthRepository: AnyObject {
     func signInWithEmail(_ email: String, password: String) async throws -> AuthResult
     func registerWithEmail(_ email: String, password: String, displayName: String?) async throws -> AuthResult
     func signInWithApple() async throws -> AuthResult
-    func signInAsGuest() async throws -> User
     func signOut() async throws
     func deleteAccount() async throws
     
@@ -139,9 +130,6 @@ protocol AuthRepository: AnyObject {
     func refreshToken() async throws -> String
     func isTokenValid() async -> Bool
     func getValidToken() async throws -> String?
-    
-    // Guest data migration
-    func migrateGuestData(to authenticatedUser: User) async throws
     
     // User state management
     func getCurrentUser() async -> User?

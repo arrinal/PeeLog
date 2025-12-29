@@ -21,30 +21,48 @@ struct ContentView: View {
     @ObservedObject private var networkMonitor = NetworkMonitor.shared
     @State private var serverToastMessage: String? = nil
     @State private var lastServerToastAt: Date = .distantPast
+    @State private var showPaywall = false
     
     var body: some View {
         Group {
             switch authState {
             case .checking:
                 loadingView
+                    .transition(.opacity)
             case .authenticated(let user):
                 ZStack(alignment: .top) {
                     mainTabView
                     connectivityOverlay
                 }
-                    .onAppear {
-                        currentUser = user
-                        Task { @MainActor in
-                            let sync = container.makeSyncCoordinator(modelContext: modelContext)
-                            try? await sync.initialFullSync()
-                        }
+                .transition(.asymmetric(
+                    insertion: .opacity.combined(with: .scale(scale: 1.05)),
+                    removal: .opacity.combined(with: .scale(scale: 0.95))
+                ))
+                .onAppear {
+                    currentUser = user
+                    Task { @MainActor in
+                        let sync = container.makeSyncCoordinator(modelContext: modelContext)
+                        try? await sync.initialFullSync()
+                        // Check subscription entitlement/trial
+                        let subVM = container.makeSubscriptionViewModel(modelContext: modelContext)
+                        await subVM.beginTrialIfEligible()
+                        await subVM.refreshEntitlement()
+                        showPaywall = !subVM.isEntitled
                     }
+                }
             case .unauthenticated:
                 AuthenticationView.makeWithDependencies(
                     container: container,
                     modelContext: modelContext
                 )
+                .transition(.asymmetric(
+                    insertion: .opacity.combined(with: .move(edge: .bottom)),
+                    removal: .opacity
+                ))
             }
+        }
+        .fullScreenCover(isPresented: $showPaywall) {
+            PaywallView(viewModel: container.makeSubscriptionViewModel(modelContext: modelContext))
         }
         .task {
             await checkAuthenticationState()
@@ -59,16 +77,6 @@ struct ContentView: View {
             NotificationCenter.default.addObserver(forName: .serverStatusToast, object: nil, queue: .main) { note in
                 guard let msg = note.userInfo?["message"] as? String else { return }
                 Task { @MainActor in
-                    // Do not show server toasts for guest users
-                    if let user = self.currentUser, user.isGuest {
-                        return
-                    }
-                    if self.currentUser == nil {
-                        let userRepository = container.makeUserRepository(modelContext: modelContext)
-                        let user = await userRepository.getCurrentUser()
-                        if let user, user.isGuest { return }
-                        self.currentUser = user
-                    }
                     // rate-limit to 3s between toasts
                     let now = Date()
                     if now.timeIntervalSince(lastServerToastAt) > 3 {
@@ -136,21 +144,24 @@ struct ContentView: View {
             .sink { state in
                 switch state {
                 case .authenticated(let user):
-                    authState = .authenticated(user)
-                    // Trigger full sync when transitioning to a non-guest authenticated user
-                    if !user.isGuest && lastSyncedUserId != user.id {
+                    withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                        authState = .authenticated(user)
+                    }
+                    if lastSyncedUserId != user.id {
                         lastSyncedUserId = user.id
                         Task { @MainActor in
                             let sync = container.makeSyncCoordinator(modelContext: modelContext)
                             try? await sync.initialFullSync()
                         }
                     }
-                case .guest(let user):
-                    authState = .authenticated(user)
                 case .unauthenticated:
-                    break
+                    withAnimation(.easeInOut(duration: 0.4)) {
+                        authState = .unauthenticated
+                    }
                 case .error:
-                    break
+                    withAnimation(.easeInOut(duration: 0.4)) {
+                        authState = .unauthenticated
+                    }
                 case .authenticating:
                     break
                 }
@@ -169,37 +180,33 @@ struct ContentView: View {
             if isFirebaseAuthenticated {
                 // User is authenticated in Firebase, check for local user
                 if let user = await userRepository.getCurrentUser() {
-                    await MainActor.run { authState = .authenticated(user) }
-                } else {
-                    // Create guest user as fallback if no local user found
-                    await createGuestUser()
+                    await MainActor.run {
+                        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                            authState = .authenticated(user)
+                        }
+                    }
                 }
             } else {
-                // Offline or token invalid; prefer last known local user without demoting
+                // Prefer last known local authenticated user if present (e.g., offline reuse)
                 if let user = await userRepository.getCurrentUser() {
-                    await MainActor.run { authState = .authenticated(user) }
+                    await MainActor.run {
+                        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                            authState = .authenticated(user)
+                        }
+                    }
                 } else {
-                    await createGuestUser()
+                    await MainActor.run {
+                        withAnimation(.easeInOut(duration: 0.4)) {
+                            authState = .unauthenticated
+                        }
+                    }
                 }
             }
         } catch {
-            // On error, create guest user
-            await createGuestUser()
-        }
-    }
-    
-    private func createGuestUser() async {
-        do {
-            let userRepository = container.makeUserRepository(modelContext: modelContext)
-            let guestUser = User.createGuest()
-            try await userRepository.saveUser(guestUser)
-            
             await MainActor.run {
-                authState = .authenticated(guestUser)
-            }
-        } catch {
-            await MainActor.run {
-                authState = .unauthenticated
+                withAnimation(.easeInOut(duration: 0.4)) {
+                    authState = .unauthenticated
+                }
             }
         }
     }
@@ -261,10 +268,19 @@ struct ContentView: View {
 
 // MARK: - Authentication State
 
-enum AuthenticationState {
+enum AuthenticationState: Equatable {
     case checking
     case authenticated(User)
     case unauthenticated
+    
+    static func == (lhs: AuthenticationState, rhs: AuthenticationState) -> Bool {
+        switch (lhs, rhs) {
+        case (.checking, .checking): return true
+        case (.unauthenticated, .unauthenticated): return true
+        case (.authenticated(let u1), .authenticated(let u2)): return u1.id == u2.id
+        default: return false
+        }
+    }
 }
 
 #Preview {

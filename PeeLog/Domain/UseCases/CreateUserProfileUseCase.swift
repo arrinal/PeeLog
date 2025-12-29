@@ -11,7 +11,6 @@ import Foundation
 @MainActor
 protocol CreateUserProfileUseCaseProtocol {
     func createUserProfile(email: String?, displayName: String?, authProvider: AuthProvider, appleUserId: String?) async throws -> User
-    func createGuestProfile() async throws -> User
     func updateProfile(user: User, displayName: String?, email: String?) async throws -> User
     func deleteProfile(user: User) async throws
 }
@@ -52,18 +51,15 @@ final class CreateUserProfileUseCase: CreateUserProfileUseCaseProtocol {
                     throw UserRepositoryError.invalidData("Apple user ID is required for Apple authentication")
                 }
                 user = User.createAppleUser(appleUserId: appleUserId, email: email, displayName: displayName)
-                
-            case .guest:
-                user = User.createGuest()
+        case .unknown:
+            throw UserRepositoryError.invalidData("Unknown authentication provider is not supported")
             }
             
             // Save user locally
             try await userRepository.saveUser(user)
             
-            // Sync to server if not guest
-            if !user.isGuest {
-                try? await userRepository.syncUserToServer(user)
-            }
+            // Sync to server
+            try? await userRepository.syncUserToServer(user)
             
             return user
             
@@ -72,15 +68,6 @@ final class CreateUserProfileUseCase: CreateUserProfileUseCaseProtocol {
             let result = errorHandlingUseCase.handleError(error, context: context)
             throw result.error
         }
-    }
-    
-    func createGuestProfile() async throws -> User {
-        return try await createUserProfile(
-            email: nil,
-            displayName: nil,
-            authProvider: .guest,
-            appleUserId: nil
-        )
     }
     
     func updateProfile(user: User, displayName: String?, email: String?) async throws -> User {
@@ -99,10 +86,8 @@ final class CreateUserProfileUseCase: CreateUserProfileUseCaseProtocol {
             // Save updated user
             try await userRepository.updateUser(user)
             
-            // Sync to server if not guest
-            if !user.isGuest {
-                try? await userRepository.syncUserToServer(user)
-            }
+            // Sync to server
+            try? await userRepository.syncUserToServer(user)
             
             return user
             

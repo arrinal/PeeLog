@@ -160,11 +160,8 @@ struct HomeView: View {
                 .refreshable {
                     let userRepository = container.makeUserRepository(modelContext: modelContext)
                     let user = await userRepository.getCurrentUser()
-                    if let user, !user.isGuest {
-                        print("[Home] pull-to-refresh: authenticated -> requesting initialFullSync for user=\(user.id)")
+                    if user != nil {
                         NotificationCenter.default.post(name: .requestInitialFullSync, object: nil)
-                    } else {
-                        print("[Home] pull-to-refresh: guest -> local reload only")
                     }
                     await MainActor.run {
                         viewModel.loadTodaysEvents()

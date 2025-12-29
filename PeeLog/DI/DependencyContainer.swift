@@ -30,12 +30,12 @@ class DependencyContainer: ObservableObject {
     private var sharedUserRepository: UserRepository?
     private var sharedAuthRepository: AuthRepository?
     private var sharedSyncCoordinator: SyncCoordinator?
-    private var migrationControllers: [ObjectIdentifier: MigrationController] = [:]
     private let syncControl = SyncControl()
     private var analyticsRepository: AnalyticsRepository?
     private var remoteAnalyticsService: RemoteAnalyticsService?
     private var analyticsCache: AnalyticsCache = AnalyticsCache()
     private let networkMonitor = NetworkMonitor.shared
+    private var subscriptionRepository: SubscriptionRepository?
     
     init() {
         // Initialize core services
@@ -123,6 +123,12 @@ class DependencyContainer: ObservableObject {
     }
     
     func getNetworkMonitor() -> NetworkMonitor { networkMonitor }
+    func getSubscriptionRepository() -> SubscriptionRepository {
+        if let repo = subscriptionRepository { return repo }
+        let repo = SubscriptionRepositoryImpl(service: SubscriptionService())
+        subscriptionRepository = repo
+        return repo
+    }
 
     // MARK: - Coordinators / Controllers
     func makeSyncCoordinator(modelContext: ModelContext) -> SyncCoordinator {
@@ -137,19 +143,7 @@ class DependencyContainer: ObservableObject {
         return coordinator
     }
     
-    func makeMigrationController(modelContext: ModelContext) -> MigrationController {
-        let contextId = ObjectIdentifier(modelContext)
-        if let existing = migrationControllers[contextId] {
-            return existing
-        }
-        let controller = MigrationControllerImpl(
-            userRepository: getUserRepository(modelContext: modelContext),
-            peeEventRepository: getPeeEventRepository(modelContext: modelContext),
-            firestoreService: firestoreService
-        )
-        migrationControllers[contextId] = controller
-        return controller
-    }
+    // Legacy migration controller removed
     
     // MARK: - View Model Factory Methods
     func makeHomeViewModel(modelContext: ModelContext) -> HomeViewModel {
@@ -209,17 +203,8 @@ class DependencyContainer: ObservableObject {
                 userRepository: userRepository,
                 errorHandlingUseCase: errorHandlingUseCase
             ),
-            migrateGuestDataUseCase: MigrateGuestDataUseCase(
-                userRepository: userRepository,
-                peeEventRepository: peeEventRepository,
-                errorHandlingUseCase: errorHandlingUseCase,
-                migrationController: makeMigrationController(modelContext: modelContext)
-            ),
             errorHandlingUseCase: errorHandlingUseCase
         )
-        // Optional: inject skip use case wired to controller
-        let skip = SkipMigrationUseCase(migrationController: makeMigrationController(modelContext: modelContext))
-        authVM.setSkipMigrationUseCase(skip)
         authVM.setSyncControl(syncControl)
         return authVM
     }
@@ -248,6 +233,20 @@ class DependencyContainer: ObservableObject {
             errorHandlingUseCase: errorHandlingUseCase,
             peeEventRepository: peeEventRepository,
             syncCoordinator: syncCoordinator
+        )
+    }
+
+    // MARK: - Subscription ViewModel
+    func makeSubscriptionViewModel(modelContext: ModelContext) -> SubscriptionViewModel {
+        let subRepo = getSubscriptionRepository()
+        let userRepo = getUserRepository(modelContext: modelContext)
+        return SubscriptionViewModel(
+            checkStatus: CheckSubscriptionStatusUseCase(repository: subRepo, userRepository: userRepo),
+            startTrial: StartTrialUseCase(repository: subRepo, userRepository: userRepo),
+            purchaseUseCase: PurchaseSubscriptionUseCase(repository: subRepo),
+            restoreUseCase: RestorePurchasesUseCase(repository: subRepo),
+            userRepository: userRepo,
+            subscriptionRepository: subRepo
         )
     }
 }

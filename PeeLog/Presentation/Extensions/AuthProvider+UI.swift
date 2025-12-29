@@ -16,8 +16,8 @@ extension AuthProvider {
             return Color(.label)
         case .email:
             return .blue
-        case .guest:
-            return .orange
+        default:
+            return .blue
         }
     }
     
@@ -35,8 +35,8 @@ extension AuthProvider {
             })
         case .email:
             return .blue
-        case .guest:
-            return .orange
+        default:
+            return .blue
         }
     }
 } 

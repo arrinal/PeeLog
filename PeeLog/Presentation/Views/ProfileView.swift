@@ -41,22 +41,6 @@ struct ProfileView: View {
             }
             .navigationTitle("Profile")
         }
-        .sheet(isPresented: $viewModel.showAuthenticationView) {
-            AuthenticationView.makeWithDependencies(
-                container: container,
-                modelContext: modelContext,
-                onAuthenticationSuccess: {
-                    // Dismiss the sheet when authentication is successful
-                    viewModel.showAuthenticationView = false
-                    // Reload user profile to reflect the new authenticated state
-                    Task {
-                        await viewModel.loadUserProfile()
-                    }
-                }
-            )
-            .presentationDetents([.large])
-            .presentationDragIndicator(.visible)
-        }
         .appAlert(
             isPresented: $viewModel.showError,
             title: "Something went wrong",
@@ -98,13 +82,9 @@ struct ProfileView: View {
                             .font(.headline)
                             .fontWeight(.semibold)
                         
-                        // Email (only for authenticated users)
-                        if !user.isGuest, let email = user.email {
+                        // Email (if available)
+                        if let email = user.email {
                             Text(email)
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                        } else if user.isGuest {
-                            Text("Local data only")
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
                         }
@@ -212,51 +192,17 @@ struct ProfileView: View {
     private var authenticationSection: some View {
         if let user = viewModel.currentUser {
             Section("Account") {
-				if user.authProvider == .guest {
-                    HStack {
-                        Image(systemName: "person.fill.questionmark")
-                            .foregroundColor(.orange)
-                            .frame(width: 20)
-                        Button("Sign In or Create Account") {
-                            viewModel.showAuthenticationView = true
-                        }
-                        Spacer()
-                    }
-					.listRowBackground(
-						ZStack {
-							let shape = RoundedRectangle(cornerRadius: 24, style: .continuous)
-							shape.fill(Color(.secondarySystemGroupedBackground))
-							// Subtle base border
-							shape.strokeBorder(Color.accentColor.opacity(0.12), lineWidth: 1)
-
-							// Full-length gradient stroke with animated phase (sweeps around)
-                            shape.strokeBorder(
-                                ctaGradient(phase: gradientPhase, colorScheme: colorScheme),
-                                lineWidth: 3
-                            )
-							.animation(.linear(duration: 1.6).repeatCount(2, autoreverses: false), value: gradientPhase)
-						}
-						.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-					)
-					.onAppear {
-						gradientPhase = 0
-						DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-							gradientPhase = 1
-						}
-					}
-				} else {
-                    HStack {
-                        Image(systemName: "rectangle.portrait.and.arrow.right.fill")
-                            .foregroundColor(.red)
-                            .frame(width: 20)
-                        
-                        Button("Sign Out") {
-                            viewModel.showSignOutConfirmation = true
-                        }
+                HStack {
+                    Image(systemName: "rectangle.portrait.and.arrow.right.fill")
                         .foregroundColor(.red)
-                        
-                        Spacer()
+                        .frame(width: 20)
+                    
+                    Button("Sign Out") {
+                        viewModel.showSignOutConfirmation = true
                     }
+                    .foregroundColor(.red)
+                    
+                    Spacer()
                 }
             }
         }
