@@ -14,6 +14,7 @@ struct StatisticsView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var viewModel: StatisticsViewModel
+    @State private var isAskAISheetPresented: Bool = false
 
     init(viewModel: StatisticsViewModel) {
         _viewModel = StateObject(wrappedValue: viewModel)
@@ -34,7 +35,7 @@ struct StatisticsView: View {
                     dailyPatternsSection
                     qualityDistributionSection
                     weeklyOverviewSection
-                    healthInsightsSection
+                    aiInsightsSection
                 }
                 .padding(.horizontal)
                 .padding(.bottom, 100)
@@ -67,6 +68,7 @@ struct StatisticsView: View {
             } else {
                 Task { await viewModel.refreshOfflineImmediate() }
             }
+            viewModel.loadAIInsights()
         }
         .onReceive(NotificationCenter.default.publisher(for: .eventsStoreWillReset)) { _ in
             Task { @MainActor in
@@ -140,6 +142,14 @@ struct StatisticsView: View {
                 onApply: { startDate, endDate in
                     viewModel.updateQualityDistributionCustomDateRange(startDate: startDate, endDate: endDate)
                     viewModel.showingQualityDistributionCustomDatePicker = false
+                }
+            )
+        }
+        .sheet(isPresented: $isAskAISheetPresented) {
+            AskAISheet(
+                canAskAI: viewModel.canAskAI,
+                onSubmit: { question in
+                    try await viewModel.askAI(question: question)
                 }
             )
         }
@@ -609,40 +619,17 @@ struct StatisticsView: View {
         .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 4)
     }
     
-    private var healthInsightsSection: some View {
-        VStack(spacing: 16) {
-            Text("Health Insights")
-                .font(.title2)
-                .fontWeight(.bold)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            
-            if viewModel.isLoadingInsights {
-                VStack(spacing: 12) {
-                    ForEach(0..<3, id: \.self) { _ in
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(Color(.systemGray6))
-                            .frame(height: 48)
-                            .shimmering()
-                    }
-                }
-            } else if !viewModel.healthInsights.isEmpty {
-                VStack(spacing: 12) {
-                    ForEach(viewModel.healthInsights, id: \.title) { insight in
-                        HealthInsightCard(insight: insight)
-                    }
-                }
-            } else {
-                Text("No insights yet for this range")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 40)
-            }
-        }
-        .padding()
-        .background(Color(.systemBackground))
-        .cornerRadius(16)
-        .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 4)
+    private var aiInsightsSection: some View {
+        AIInsightsSection(
+            dailyInsight: viewModel.dailyInsight,
+            weeklyInsight: viewModel.weeklyInsight,
+            customInsight: viewModel.customInsight,
+            canAskAI: viewModel.canAskAI,
+            isLoadingAI: viewModel.isLoadingAIInsights,
+            legacyHealthInsights: viewModel.healthInsights,
+            isLoadingLegacy: viewModel.isLoadingInsights,
+            onAskAITapped: { isAskAISheetPresented = true }
+        )
     }
 }
 

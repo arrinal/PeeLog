@@ -12,6 +12,7 @@ import Combine
 final class StatisticsViewModel: ObservableObject {
     // MARK: - Use Cases
     private let analyticsRepository: AnalyticsRepository
+    private let aiInsightRepository: AIInsightRepository
     private let networkMonitor = NetworkMonitor.shared
     private var cancellables = Set<AnyCancellable>()
     
@@ -70,6 +71,13 @@ final class StatisticsViewModel: ObservableObject {
     @Published var insightsSource: AnalyticsDataSource = .remote
     
     @Published var lastSyncedAt: Date?
+
+    // MARK: - AI Insights (cached from backend)
+    @Published var dailyInsight: AIInsight?
+    @Published var weeklyInsight: AIInsight?
+    @Published var customInsight: AIInsight?
+    @Published var canAskAI: Bool = false
+    @Published var isLoadingAIInsights: Bool = false
     
     var isDataStale: Bool {
         // Strategy 1 (backend-only): stale when offline OR when we are showing cached data.
@@ -89,8 +97,9 @@ final class StatisticsViewModel: ObservableObject {
     private var isStoreResetting = false
     
     // MARK: - Initializer
-    init(analyticsRepository: AnalyticsRepository) {
+    init(analyticsRepository: AnalyticsRepository, aiInsightRepository: AIInsightRepository) {
         self.analyticsRepository = analyticsRepository
+        self.aiInsightRepository = aiInsightRepository
         setupDebounce()
         installStoreResetObserversIfNeeded()
     }
@@ -112,6 +121,9 @@ final class StatisticsViewModel: ObservableObject {
                 self.weeklyData = []
                 self.healthInsights = []
                 self.lastSyncedAt = nil
+                self.dailyInsight = nil
+                self.weeklyInsight = nil
+                self.customInsight = nil
             }
         }
         NotificationCenter.default.addObserver(forName: .eventsStoreDidReset, object: nil, queue: .main) { [weak self] _ in
@@ -139,6 +151,33 @@ final class StatisticsViewModel: ObservableObject {
         } else {
             Task { await loadOfflineFromCache() }
         }
+    }
+
+    func loadAIInsights() {
+        guard !isStoreResetting else { return }
+        Task { await loadAIInsightsInternal() }
+    }
+
+    func askAI(question: String) async throws {
+        let resp = try await aiInsightRepository.askAI(question: question)
+        customInsight = AIInsight(type: .custom, content: resp.insight, generatedAt: Date(), question: question)
+        canAskAI = false
+    }
+
+    private func loadAIInsightsInternal() async {
+        isLoadingAIInsights = true
+
+        async let dailyTask = try? aiInsightRepository.fetchDailyInsight()
+        async let weeklyTask = try? aiInsightRepository.fetchWeeklyInsight()
+        async let customTask = try? aiInsightRepository.fetchCustomInsight()
+        async let canAskTask = aiInsightRepository.canAskAIToday()
+
+        dailyInsight = await dailyTask
+        weeklyInsight = await weeklyTask
+        customInsight = await customTask
+        canAskAI = await canAskTask
+
+        isLoadingAIInsights = false
     }
 
     private func analyticsRange(for period: TimePeriod, start: Date, end: Date) -> AnalyticsRange {

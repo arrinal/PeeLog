@@ -36,6 +36,7 @@ class DependencyContainer: ObservableObject {
     private var analyticsCache: AnalyticsCache = AnalyticsCache()
     private let networkMonitor = NetworkMonitor.shared
     private var subscriptionRepository: SubscriptionRepository?
+    private var aiInsightRepository: AIInsightRepository?
     
     init() {
         // Initialize core services
@@ -130,6 +131,13 @@ class DependencyContainer: ObservableObject {
         return repo
     }
 
+    func getAIInsightRepository() -> AIInsightRepository {
+        if let repo = aiInsightRepository { return repo }
+        let repo = AIInsightRepositoryImpl()
+        aiInsightRepository = repo
+        return repo
+    }
+
     // MARK: - Coordinators / Controllers
     func makeSyncCoordinator(modelContext: ModelContext) -> SyncCoordinator {
         if let shared = sharedSyncCoordinator { return shared }
@@ -174,7 +182,8 @@ class DependencyContainer: ObservableObject {
     
     func makeStatisticsViewModel(modelContext: ModelContext) -> StatisticsViewModel {
         return StatisticsViewModel(
-            analyticsRepository: getAnalyticsRepository()
+            analyticsRepository: getAnalyticsRepository(),
+            aiInsightRepository: getAIInsightRepository()
         )
     }
     
