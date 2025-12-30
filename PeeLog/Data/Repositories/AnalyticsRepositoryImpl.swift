@@ -17,6 +17,13 @@ final class AnalyticsRepositoryImpl: AnalyticsRepository {
         self.cache = cache
     }
     
+    private func requireUid() async throws -> String {
+        guard let uid = await AuthHelper.currentUid(), !uid.isEmpty else {
+            throw AnalyticsRepositoryError.notAuthenticated
+        }
+        return uid
+    }
+    
     private func toPeriodRange(_ range: AnalyticsRange) -> RemoteAnalyticsService.PeriodRange {
         let p: String
         switch range.period {
@@ -34,7 +41,7 @@ final class AnalyticsRepositoryImpl: AnalyticsRepository {
     
     func fetchOverview(range: AnalyticsRange) async throws -> Sourced<OverviewFromServer> {
         let pr = toPeriodRange(range)
-        let uid = await AuthHelper.currentUid() ?? "local"
+        let uid = try await requireUid()
         do {
             let resp = try await service.fetchStatsOverview(range: pr)
             try await cache.saveOverview(uid: uid, period: pr.period, startISO: pr.startDate, endISO: pr.endDate, tz: pr.timeZone, response: resp)
@@ -65,13 +72,13 @@ final class AnalyticsRepositoryImpl: AnalyticsRepository {
                 )
                 return Sourced(data: dto, source: .cache)
             }
-            throw error
+            throw AnalyticsRepositoryError.noCacheAvailable(section: .overview, underlyingDescription: error.localizedDescription)
         }
     }
     
     func fetchQualityTrends(range: AnalyticsRange) async throws -> Sourced<[QualityTrendPoint]> {
         let pr = toPeriodRange(range)
-        let uid = await AuthHelper.currentUid() ?? "local"
+        let uid = try await requireUid()
         do {
             let resp = try await service.fetchQualityTrends(range: pr)
             try await cache.saveQualityTrends(uid: uid, period: pr.period, startISO: pr.startDate, endISO: pr.endDate, tz: pr.timeZone, response: resp)
@@ -82,13 +89,13 @@ final class AnalyticsRepositoryImpl: AnalyticsRepository {
                 let data = cached.map { QualityTrendPoint(date: ISO8601DateFormatter().date(from: $0.date) ?? Date(), averageQuality: $0.averageQuality) }
                 return Sourced(data: data, source: .cache)
             }
-            throw error
+            throw AnalyticsRepositoryError.noCacheAvailable(section: .trends, underlyingDescription: error.localizedDescription)
         }
     }
     
     func fetchHourly(range: AnalyticsRange) async throws -> Sourced<[HourlyData]> {
         let pr = toPeriodRange(range)
-        let uid = await AuthHelper.currentUid() ?? "local"
+        let uid = try await requireUid()
         do {
             let resp = try await service.fetchHourly(range: pr)
             try await cache.saveHourly(uid: uid, period: pr.period, startISO: pr.startDate, endISO: pr.endDate, tz: pr.timeZone, response: resp)
@@ -99,13 +106,13 @@ final class AnalyticsRepositoryImpl: AnalyticsRepository {
                 let data = cached.map { HourlyData(hour: $0.hour, count: $0.count) }
                 return Sourced(data: data, source: .cache)
             }
-            throw error
+            throw AnalyticsRepositoryError.noCacheAvailable(section: .hourly, underlyingDescription: error.localizedDescription)
         }
     }
     
     func fetchQualityDistribution(range: AnalyticsRange) async throws -> Sourced<[QualityDistribution]> {
         let pr = toPeriodRange(range)
-        let uid = await AuthHelper.currentUid() ?? "local"
+        let uid = try await requireUid()
         func map(_ list: [RemoteAnalyticsService.QualityDistributionResponse]) -> [QualityDistribution] {
             return list.compactMap { item in
             let quality: PeeQuality
@@ -130,12 +137,12 @@ final class AnalyticsRepositoryImpl: AnalyticsRepository {
                 let data = map(cached)
                 return Sourced(data: data, source: .cache)
             }
-            throw error
+            throw AnalyticsRepositoryError.noCacheAvailable(section: .distribution, underlyingDescription: error.localizedDescription)
         }
     }
     
     func fetchWeekly() async throws -> Sourced<[WeeklyData]> {
-        let uid = await AuthHelper.currentUid() ?? "local"
+        let uid = try await requireUid()
         do {
             let resp = try await service.fetchWeekly()
             try await cache.saveWeekly(uid: uid, response: resp)
@@ -146,13 +153,13 @@ final class AnalyticsRepositoryImpl: AnalyticsRepository {
                 let data = cached.map { WeeklyData(dayOfWeek: $0.dayOfWeek, dayName: $0.dayName, count: $0.count, averageQuality: $0.averageQuality, severity: $0.severity) }
                 return Sourced(data: data, source: .cache)
             }
-            throw error
+            throw AnalyticsRepositoryError.noCacheAvailable(section: .weekly, underlyingDescription: error.localizedDescription)
         }
     }
     
     func fetchInsights(range: AnalyticsRange) async throws -> Sourced<[HealthInsight]> {
         let pr = toPeriodRange(range)
-        let uid = await AuthHelper.currentUid() ?? "local"
+        let uid = try await requireUid()
         func map(_ items: [RemoteAnalyticsService.Insight]) -> [HealthInsight] {
             return items.map { item in
             let type: HealthInsightType
@@ -175,7 +182,7 @@ final class AnalyticsRepositoryImpl: AnalyticsRepository {
                 let data = map(cached)
                 return Sourced(data: data, source: .cache)
             }
-            throw error
+            throw AnalyticsRepositoryError.noCacheAvailable(section: .insights, underlyingDescription: error.localizedDescription)
         }
     }
 }

@@ -159,9 +159,11 @@ struct ContentView: View {
                         authState = .unauthenticated
                     }
                 case .error:
-                    withAnimation(.easeInOut(duration: 0.4)) {
-                        authState = .unauthenticated
+                    // IMPORTANT: Do not kick the user to login for transient/offline auth errors.
+                    if case .authenticated = authState, !networkMonitor.isOnline {
+                        return
                     }
+                    withAnimation(.easeInOut(duration: 0.4)) { authState = .unauthenticated }
                 case .authenticating:
                     break
                 }

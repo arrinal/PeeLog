@@ -39,4 +39,11 @@ struct OverviewFromServer {
     let interpretationSeverity: String // positive|info|warning
 }
 
+// MARK: - Errors
+
+enum AnalyticsRepositoryError: Error, Sendable {
+    case notAuthenticated
+    case noCacheAvailable(section: AnalyticsSection, underlyingDescription: String)
+}
+
 

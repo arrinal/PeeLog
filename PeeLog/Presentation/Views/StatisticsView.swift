@@ -23,6 +23,12 @@ struct StatisticsView: View {
         NavigationStack {
             ScrollView {
                 LazyVStack(spacing: 20) {
+                    if shouldShowNoCacheEmptyStateBanner {
+                        noCacheEmptyStateBanner
+                    } else if viewModel.isDataStale {
+                        staleDataBanner
+                    }
+                    
                     summaryCardsSection
                     qualityTrendsSection
                     dailyPatternsSection
@@ -34,6 +40,23 @@ struct StatisticsView: View {
                 .padding(.bottom, 100)
             }
             .navigationTitle("Statistics")
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    if let lastSynced = viewModel.lastSyncedAt {
+                        Text("Last synced \(lastSynced.formatted(.relative(presentation: .named)))")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        viewModel.loadStatistics()
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                    .accessibilityLabel("Refresh statistics")
+                }
+            }
             .refreshable {
                 viewModel.loadStatistics()
             }
@@ -72,7 +95,7 @@ struct StatisticsView: View {
             }
         }
         .onReceive(NetworkMonitor.shared.$isOnline) { isOnline in
-            if isOnline && viewModel.useRemoteRefreshAllowed {
+            if isOnline {
                 viewModel.loadStatistics()
             } else if !isOnline {
                 Task { await viewModel.refreshOfflineImmediate() }
@@ -120,6 +143,84 @@ struct StatisticsView: View {
                 }
             )
         }
+    }
+    
+    private var shouldShowNoCacheEmptyStateBanner: Bool {
+        // If we've never successfully synced from the backend, we can't show useful offline stats.
+        return !NetworkMonitor.shared.isOnline && viewModel.lastSyncedAt == nil
+    }
+    
+    private var noCacheEmptyStateBanner: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "wifi.slash")
+                .foregroundColor(.orange)
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Offline - No cached stats yet")
+                    .font(.subheadline)
+                    .fontWeight(.bold)
+                
+                Text("Connect to the internet and refresh once to enable offline viewing.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            
+            Spacer()
+            
+            Button("Refresh") {
+                viewModel.loadStatistics()
+            }
+            .font(.caption)
+            .buttonStyle(.bordered)
+            .disabled(!NetworkMonitor.shared.isOnline)
+        }
+        .padding()
+        .background(Color(.secondarySystemBackground))
+        .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.orange.opacity(0.25), lineWidth: 1)
+        )
+    }
+    
+    private var staleDataBanner: some View {
+        let isOnline = NetworkMonitor.shared.isOnline
+        return HStack(spacing: 12) {
+            Image(systemName: isOnline ? "clock.arrow.circlepath" : "exclamationmark.triangle.fill")
+                .foregroundColor(isOnline ? .blue : .yellow)
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(isOnline ? "Some data is cached" : "Offline Mode")
+                    .font(.subheadline)
+                    .fontWeight(.bold)
+                
+                if let lastSynced = viewModel.lastSyncedAt {
+                    Text("Last synced \(lastSynced.formatted(.relative(presentation: .named)))")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                } else {
+                    Text("Showing cached data")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+            
+            Spacer()
+            
+            Button("Refresh") {
+                viewModel.loadStatistics()
+            }
+            .font(.caption)
+            .buttonStyle(.bordered)
+            .disabled(!isOnline)
+        }
+        .padding()
+        .background(Color(.secondarySystemBackground))
+        .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke((isOnline ? Color.blue : Color.yellow).opacity(0.25), lineWidth: 1)
+        )
     }
     
     private var summaryCardsSection: some View {
@@ -855,4 +956,3 @@ struct CustomDateRangeSheet: View {
         .modelContainer(container)
         .environment(\.dependencyContainer, dependencyContainer)
 } 
- 

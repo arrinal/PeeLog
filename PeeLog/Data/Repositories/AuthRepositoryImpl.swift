@@ -113,11 +113,23 @@ final class AuthRepositoryImpl: AuthRepository {
         }
         
         do {
-            // Reload user to get fresh data including display name
-            try await firebaseAuthService.reloadUser()
-            
-            // Get updated user info after reload
-            let updatedFirebaseUser = firebaseAuthService.getCurrentUser() ?? firebaseUser
+            // Reload user to get fresh data including display name.
+            //
+            // IMPORTANT (offline behavior): `reload()` can fail when the device is offline.
+            // That should NOT force the app into an unauthenticated/login state if we already
+            // have a valid local user and Firebase still has a currentUser session.
+            let updatedFirebaseUser: FirebaseAuth.User
+            do {
+                try await firebaseAuthService.reloadUser()
+                updatedFirebaseUser = firebaseAuthService.getCurrentUser() ?? firebaseUser
+            } catch {
+                if let authError = error as? AuthError, case .networkError = authError {
+                    // Offline: proceed with the cached Firebase user.
+                    updatedFirebaseUser = firebaseUser
+                } else {
+                    throw error
+                }
+            }
             
             // Try to find existing user in local storage (but not during sign-out)
             if let existingUser = await getUserByEmail(updatedFirebaseUser.email) {
@@ -182,7 +194,20 @@ final class AuthRepositoryImpl: AuthRepository {
     }
     
     private func handleFirebaseSignOut() async {
-        // Clear current user first
+        // If the user explicitly signed out, always honor it.
+        if isSigningOut {
+            currentUserSubject.send(nil)
+            updateAuthState(.unauthenticated)
+            return
+        }
+
+        // IMPORTANT (offline behavior): a transient Firebase state change while offline should NOT
+        // kick a previously logged-in user back to the login screen. Prefer last local user.
+        if !NetworkMonitor.shared.isOnline, let localUser = await getMostRecentLocalUser() {
+            updateAuthState(.authenticated(localUser))
+            return
+        }
+
         currentUserSubject.send(nil)
         updateAuthState(.unauthenticated)
     }
@@ -466,13 +491,20 @@ final class AuthRepositoryImpl: AuthRepository {
     }
     
     func updateAuthState(_ state: AuthState) {
+        // If we are already authenticated, never downgrade to login due to a pure connectivity issue.
+        if case .authenticated = authStateSubject.value,
+           case .error(let err) = state,
+           case .networkError = err {
+            return
+        }
         authStateSubject.send(state)
     }
     
     func isUserAuthenticated() async -> Bool {
-        // Only real authenticated users are considered authenticated
+        // If we have a local authenticated user AND Firebase still reports a current user session,
+        // treat the user as authenticated even when offline (token refresh may fail offline).
         guard currentUserSubject.value != nil else { return false }
-        return await firebaseAuthService.isTokenValid()
+        return firebaseAuthService.getCurrentUser() != nil
     }
     
     // MARK: - Validation
@@ -524,6 +556,17 @@ final class AuthRepositoryImpl: AuthRepository {
         do {
             let users = try modelContext.fetch(descriptor)
             return users.first
+        } catch {
+            return nil
+        }
+    }
+
+    private func getMostRecentLocalUser() async -> User? {
+        let descriptor = FetchDescriptor<User>(
+            sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
+        )
+        do {
+            return try modelContext.fetch(descriptor).first
         } catch {
             return nil
         }
