@@ -2,6 +2,7 @@
 //  AnalyticsFallbackTests.swift
 //  PeeLogTests
 //
+//
 
 import Foundation
 import Testing
@@ -61,8 +62,8 @@ final class StubAnalyticsRepository: AnalyticsRepository {
 
     func fetchInsights(range: AnalyticsRange) async throws -> Sourced<[HealthInsight]> {
         switch mode {
-        case .remote: return Sourced(data: [HealthInsight(type: .info, title: "Hydrate", message: "Drink water")], source: .remote)
-        case .cache:  return Sourced(data: [HealthInsight(type: .info, title: "Cached", message: "Cached msg")], source: .cache)
+        case .remote: return Sourced(data: [HealthInsight(type: .info, title: "Hydrate", message: "Drink water", recommendation: nil)], source: .remote)
+        case .cache:  return Sourced(data: [HealthInsight(type: .info, title: "Cached", message: "Cached msg", recommendation: nil)], source: .cache)
         case .failure: struct E: Error {}; throw E()
         }
     }
@@ -72,26 +73,7 @@ final class StubAnalyticsRepository: AnalyticsRepository {
 struct AnalyticsFallbackTests {
 
     private func makeViewModel(repo: AnalyticsRepository) -> StatisticsViewModel {
-        // Build minimal dependencies with defaults
-        let eventsRepo = PeeEventRepositoryDummy()
-        let userRepo = UserRepositoryDummy()
-        let all = GetAllPeeEventsUseCase(repository: eventsRepo, userRepository: userRepo)
-        let calc = CalculateBasicStatisticsUseCase(repository: eventsRepo)
-        let trends = GenerateQualityTrendsUseCase()
-        let insights = GenerateHealthInsightsUseCase(repository: eventsRepo)
-        let hourly = AnalyzeHourlyPatternsUseCase()
-        let dist = GenerateQualityDistributionUseCase()
-        let weekly = GenerateWeeklyDataUseCase(repository: eventsRepo)
-        return StatisticsViewModel(
-            getAllEventsUseCase: all,
-            calculateStatisticsUseCase: calc,
-            generateQualityTrendsUseCase: trends,
-            generateHealthInsightsUseCase: insights,
-            analyzeHourlyPatternsUseCase: hourly,
-            generateQualityDistributionUseCase: dist,
-            generateWeeklyDataUseCase: weekly,
-            analyticsRepository: repo
-        )
+        return StatisticsViewModel(analyticsRepository: repo)
     }
 
     @Test func loadsFromRemoteWhenAvailable() async throws {
@@ -121,57 +103,20 @@ struct AnalyticsFallbackTests {
         #expect(vm.insightsSource == .cache)
     }
 
-    @Test func fallsBackToLocalWhenRemoteUnavailableAndNoCache() async throws {
-        // Simulate total failure; VM should compute locally and mark sources as .local
-        // We simulate by using a failing repository and toggling VM to offline path via NetworkMonitor stub
+    @Test func handlesTotalFailure() async throws {
+        // Simulate total failure; VM should report source as .cache (meaning unavailable/stale)
+        // We removed local fallback, so it should NOT be .local
         let failingRepo = StubAnalyticsRepository(mode: .failure)
         let vm = makeViewModel(repo: failingRepo)
-        // Force loadLocal path by setting network offline in a safe way if available; otherwise rely on catch path
         vm.loadStatistics()
         try await Task.sleep(nanoseconds: 600_000_000)
-        #expect(vm.trendsSource == .local)
-        #expect(vm.hourlySource == .local)
-        #expect(vm.distributionSource == .local)
-        #expect(vm.weeklySource == .local)
-        #expect(vm.insightsSource == .local)
+        
+        // In the new implementation, failure defaults to .cache
+        #expect(vm.overviewSource == .cache)
+        #expect(vm.trendsSource == .cache)
+        #expect(vm.hourlySource == .cache)
+        #expect(vm.distributionSource == .cache)
+        #expect(vm.weeklySource == .cache)
+        #expect(vm.insightsSource == .cache)
     }
 }
-
-// MARK: - Dummy Repositories for UseCases (no persistence)
-@MainActor
-final class PeeEventRepositoryDummy: PeeEventRepository {
-    func getAllEvents() -> [PeeEvent] { [] }
-    func getEventsForToday() -> [PeeEvent] { [] }
-    func addEvent(_ event: PeeEvent) throws {}
-    func addEvents(_ events: [PeeEvent]) throws {}
-    func deleteEvent(_ event: PeeEvent) throws {}
-    func clearAllEvents() throws {}
-}
-
-@MainActor
-final class UserRepositoryDummy: UserRepository {
-    var currentUser: AnyPublisher<User?, Never> { Just(User.createEmailUser(email: "test@example.com")).eraseToAnyPublisher() }
-    var syncStatus: AnyPublisher<SyncStatus, Never> { Just(.idle).eraseToAnyPublisher() }
-    var isLoading: AnyPublisher<Bool, Never> { Just(false).eraseToAnyPublisher() }
-
-    func getCurrentUser() async -> User? { User.createEmailUser(email: "test@example.com") }
-    func saveUser(_ user: User) async throws {}
-    func updateUser(_ user: User) async throws {}
-    func deleteUser(_ user: User) async throws {}
-    func clearUserData() async throws {}
-    func clearAuthenticatedUsers() async throws {}
-    func updateUserPreferences(_ preferences: UserPreferences) async throws {}
-    func getUserPreferences() async -> UserPreferences? { nil }
-    func updateDisplayName(_ displayName: String) async throws {}
-    func updateEmail(_ email: String) async throws {}
-    func syncUserData() async throws {}
-    func syncUserToServer(_ user: User) async throws {}
-    func loadUserFromServer() async throws -> User? { nil }
-    func exportUserData() async throws -> Data { Data() }
-    func importUserData(_ data: Data) async throws {}
-    func getUserById(_ id: UUID) async -> User? { nil }
-    func getAllLocalUsers() async -> [User] { [] }
-    func clearAllLocalData() async throws {}
-}
-
-

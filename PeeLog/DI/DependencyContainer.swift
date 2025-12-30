@@ -173,15 +173,7 @@ class DependencyContainer: ObservableObject {
     }
     
     func makeStatisticsViewModel(modelContext: ModelContext) -> StatisticsViewModel {
-        let repository = getPeeEventRepository(modelContext: modelContext)
         return StatisticsViewModel(
-            getAllEventsUseCase: GetAllPeeEventsUseCase(repository: repository, userRepository: getUserRepository(modelContext: modelContext)),
-            calculateStatisticsUseCase: CalculateBasicStatisticsUseCase(repository: repository),
-            generateQualityTrendsUseCase: GenerateQualityTrendsUseCase(),
-            generateHealthInsightsUseCase: GenerateHealthInsightsUseCase(repository: repository),
-            analyzeHourlyPatternsUseCase: AnalyzeHourlyPatternsUseCase(),
-            generateQualityDistributionUseCase: GenerateQualityDistributionUseCase(),
-            generateWeeklyDataUseCase: GenerateWeeklyDataUseCase(repository: repository),
             analyticsRepository: getAnalyticsRepository()
         )
     }

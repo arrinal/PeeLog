@@ -20,8 +20,14 @@ final class NetworkMonitor: ObservableObject {
         guard !started else { return }
         started = true
         monitor.pathUpdateHandler = { [weak self] path in
+            let newValue = (path.status == .satisfied)
             Task { @MainActor in
-                self?.isOnline = (path.status == .satisfied)
+                guard let self else { return }
+                // Avoid publishing duplicate values (NWPathMonitor can emit updates even when status doesn't change).
+                // Duplicate publishes can cause downstream views to refresh/fetch repeatedly.
+                if self.isOnline != newValue {
+                    self.isOnline = newValue
+                }
             }
         }
         monitor.start(queue: queue)

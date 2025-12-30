@@ -6,24 +6,13 @@
 //
 
 import Foundation
-import SwiftData
-import SwiftUI
 import Combine
 
 @MainActor
 final class StatisticsViewModel: ObservableObject {
     // MARK: - Use Cases
-    private let getAllEventsUseCase: GetAllPeeEventsUseCase
-    private let calculateStatisticsUseCase: CalculateBasicStatisticsUseCase
-    private let generateQualityTrendsUseCase: GenerateQualityTrendsUseCase
-    private let generateHealthInsightsUseCase: GenerateHealthInsightsUseCase
-    private let analyzeHourlyPatternsUseCase: AnalyzeHourlyPatternsUseCase
-    private let generateQualityDistributionUseCase: GenerateQualityDistributionUseCase
-    private let generateWeeklyDataUseCase: GenerateWeeklyDataUseCase
     private let analyticsRepository: AnalyticsRepository
-    private let useRemote: Bool = true // feature flag: prefer backend when available
     private let networkMonitor = NetworkMonitor.shared
-    var useRemoteRefreshAllowed: Bool { useRemote }
     private var cancellables = Set<AnyCancellable>()
     
     // MARK: - Published Properties
@@ -63,6 +52,7 @@ final class StatisticsViewModel: ObservableObject {
     @Published var weeklyData: [WeeklyData] = []
     @Published var healthInsights: [HealthInsight] = []
     @Published private var healthScoreInterpretationServer: String?
+    
     // Loading flags per section
     @Published var isLoadingOverview: Bool = false
     @Published var isLoadingTrends: Bool = false
@@ -70,6 +60,7 @@ final class StatisticsViewModel: ObservableObject {
     @Published var isLoadingDistribution: Bool = false
     @Published var isLoadingWeekly: Bool = false
     @Published var isLoadingInsights: Bool = false
+    
     // Data source badges per section (future use)
     @Published var overviewSource: AnalyticsDataSource = .remote
     @Published var trendsSource: AnalyticsDataSource = .remote
@@ -78,31 +69,27 @@ final class StatisticsViewModel: ObservableObject {
     @Published var weeklySource: AnalyticsDataSource = .remote
     @Published var insightsSource: AnalyticsDataSource = .remote
     
-    private var allEvents: [PeeEvent] = []
-    private var basicStatistics: BasicStatistics?
-    private var lastAnalyticsRefreshAt: Date?
+    @Published var lastSyncedAt: Date?
+    
+    var isDataStale: Bool {
+        // Strategy 1 (backend-only): stale when offline OR when we are showing cached data.
+        if !networkMonitor.isOnline { return true }
+        return [
+            overviewSource,
+            trendsSource,
+            hourlySource,
+            distributionSource,
+            weeklySource,
+            insightsSource
+        ].contains(.cache)
+    }
+    
     private let foregroundRefreshThresholdSeconds: TimeInterval = 60 * 30
     private var observersInstalled = false
     private var isStoreResetting = false
     
     // MARK: - Initializer
-    init(
-        getAllEventsUseCase: GetAllPeeEventsUseCase,
-        calculateStatisticsUseCase: CalculateBasicStatisticsUseCase,
-        generateQualityTrendsUseCase: GenerateQualityTrendsUseCase,
-        generateHealthInsightsUseCase: GenerateHealthInsightsUseCase,
-        analyzeHourlyPatternsUseCase: AnalyzeHourlyPatternsUseCase,
-        generateQualityDistributionUseCase: GenerateQualityDistributionUseCase,
-        generateWeeklyDataUseCase: GenerateWeeklyDataUseCase,
-        analyticsRepository: AnalyticsRepository
-    ) {
-        self.getAllEventsUseCase = getAllEventsUseCase
-        self.calculateStatisticsUseCase = calculateStatisticsUseCase
-        self.generateQualityTrendsUseCase = generateQualityTrendsUseCase
-        self.generateHealthInsightsUseCase = generateHealthInsightsUseCase
-        self.analyzeHourlyPatternsUseCase = analyzeHourlyPatternsUseCase
-        self.generateQualityDistributionUseCase = generateQualityDistributionUseCase
-        self.generateWeeklyDataUseCase = generateWeeklyDataUseCase
+    init(analyticsRepository: AnalyticsRepository) {
         self.analyticsRepository = analyticsRepository
         setupDebounce()
         installStoreResetObserversIfNeeded()
@@ -112,24 +99,27 @@ final class StatisticsViewModel: ObservableObject {
         guard !observersInstalled else { return }
         observersInstalled = true
         NotificationCenter.default.addObserver(forName: .eventsStoreWillReset, object: nil, queue: .main) { [weak self] _ in
-            guard let self else { return }
-            self.isStoreResetting = true
-            self.totalEvents = 0
-            self.thisWeekEvents = 0
-            self.averageDaily = 0
-            self.healthScore = 0
-            self.qualityTrendData = []
-            self.hourlyData = []
-            self.qualityDistribution = []
-            self.weeklyData = []
-            self.healthInsights = []
-            self.allEvents = []
-            self.basicStatistics = nil
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.isStoreResetting = true
+                self.totalEvents = 0
+                self.thisWeekEvents = 0
+                self.averageDaily = 0
+                self.healthScore = 0
+                self.qualityTrendData = []
+                self.hourlyData = []
+                self.qualityDistribution = []
+                self.weeklyData = []
+                self.healthInsights = []
+                self.lastSyncedAt = nil
+            }
         }
         NotificationCenter.default.addObserver(forName: .eventsStoreDidReset, object: nil, queue: .main) { [weak self] _ in
-            guard let self else { return }
-            self.isStoreResetting = false
-            self.loadStatistics()
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.isStoreResetting = false
+                self.loadStatistics()
+            }
         }
     }
     
@@ -143,21 +133,12 @@ final class StatisticsViewModel: ObservableObject {
     }
     
     func loadStatistics() {
-        if useRemote && networkMonitor.isOnline {
+        // Always prefer remote if online, otherwise check cache
+        if networkMonitor.isOnline {
             Task { await loadRemote() }
         } else {
-            Task { await loadOfflineFromCacheThenLocal() }
+            Task { await loadOfflineFromCache() }
         }
-    }
-
-    private func loadLocal() {
-        loadAllEvents()
-        calculateBasicStatistics()
-        generateQualityTrends()
-        generateHourlyPatterns()
-        generateQualityDistribution()
-        generateWeeklyData()
-        generateHealthInsights()
     }
 
     private func analyticsRange(for period: TimePeriod, start: Date, end: Date) -> AnalyticsRange {
@@ -200,10 +181,6 @@ final class StatisticsViewModel: ObservableObject {
         let hourlyRange = loadPeriodRange(dailyPatternsPeriod, customStart: dailyPatternsCustomStartDate, customEnd: dailyPatternsCustomEndDate)
         let distRange = loadPeriodRange(qualityDistributionPeriod, customStart: qualityDistributionCustomStartDate, customEnd: qualityDistributionCustomEndDate)
 
-        // Prepare local data in case we need graceful fallback
-        let fallbackEvents = getAllEventsUseCase.execute()
-        self.allEvents = fallbackEvents
-
         // Parallel fetches using async-let with Sourced<T> results
         async let ovTask = analyticsRepository.fetchOverview(range: overviewRange)
         async let trTask = analyticsRepository.fetchQualityTrends(range: trendsRange)
@@ -212,6 +189,9 @@ final class StatisticsViewModel: ObservableObject {
         async let weTask = analyticsRepository.fetchWeekly()
         async let insTask = analyticsRepository.fetchInsights(range: trendsRange)
 
+        var successCount = 0
+        var remoteSuccessCount = 0
+        
         do {
             let ov = try await ovTask
             totalEvents = ov.data.stats.totalEvents
@@ -220,82 +200,77 @@ final class StatisticsViewModel: ObservableObject {
             healthScore = ov.data.stats.healthScore
             healthScoreInterpretationServer = ov.data.interpretationLabel
             overviewSource = ov.source
-            debugPrint("[Analytics] Overview source=\(overviewSource.rawValue)")
+            successCount += 1
+            if ov.source == .remote { remoteSuccessCount += 1 }
         } catch {
-            // Fallback to local computations if overview fails completely
-            loadLocal()
-            overviewSource = .local
-            debugPrint("[Analytics] Overview source=local (fallback)")
+            overviewSource = .cache // Treat failure as cache/unavailable
         }
         isLoadingOverview = false
 
         if let tr = try? await trTask {
             qualityTrendData = tr.data
             trendsSource = tr.source
-            debugPrint("[Analytics] Trends source=\(trendsSource.rawValue) period=\(qualityTrendsPeriod.rawValue)")
+            successCount += 1
+            if tr.source == .remote { remoteSuccessCount += 1 }
         } else {
-            // Local fallback
-            generateQualityTrends()
-            trendsSource = .local
-            debugPrint("[Analytics] Trends source=local (fallback) period=\(qualityTrendsPeriod.rawValue)")
+            trendsSource = .cache
         }
         isLoadingTrends = false
 
         if let ho = try? await hoTask {
             hourlyData = ho.data
             hourlySource = ho.source
-            debugPrint("[Analytics] Hourly source=\(hourlySource.rawValue) period=\(dailyPatternsPeriod.rawValue)")
+            successCount += 1
+            if ho.source == .remote { remoteSuccessCount += 1 }
         } else {
-            generateHourlyPatterns()
-            hourlySource = .local
-            debugPrint("[Analytics] Hourly source=local (fallback) period=\(dailyPatternsPeriod.rawValue)")
+            hourlySource = .cache
         }
         isLoadingHourly = false
 
         if let di = try? await diTask {
             qualityDistribution = di.data
             distributionSource = di.source
-            debugPrint("[Analytics] Distribution source=\(distributionSource.rawValue) period=\(qualityDistributionPeriod.rawValue)")
+            successCount += 1
+            if di.source == .remote { remoteSuccessCount += 1 }
         } else {
-            generateQualityDistribution()
-            distributionSource = .local
-            debugPrint("[Analytics] Distribution source=local (fallback) period=\(qualityDistributionPeriod.rawValue)")
+            distributionSource = .cache
         }
         isLoadingDistribution = false
 
         if let we = try? await weTask {
             weeklyData = we.data
             weeklySource = we.source
-            debugPrint("[Analytics] Weekly source=\(weeklySource.rawValue)")
+            successCount += 1
+            if we.source == .remote { remoteSuccessCount += 1 }
         } else {
-            generateWeeklyData()
-            weeklySource = .local
-            debugPrint("[Analytics] Weekly source=local (fallback)")
+            weeklySource = .cache
         }
         isLoadingWeekly = false
 
         if let ins = try? await insTask {
             healthInsights = ins.data
             insightsSource = ins.source
-            debugPrint("[Analytics] Insights source=\(insightsSource.rawValue) period=\(qualityTrendsPeriod.rawValue)")
+            successCount += 1
+            if ins.source == .remote { remoteSuccessCount += 1 }
         } else {
-            // Local insights require basic statistics; compute without touching published overview values
-            let stats = calculateStatisticsUseCase.execute(events: allEvents)
-            healthInsights = generateHealthInsightsUseCase.execute(statistics: stats, events: allEvents)
-            insightsSource = .local
-            debugPrint("[Analytics] Insights source=local (fallback) period=\(qualityTrendsPeriod.rawValue)")
+            insightsSource = .cache
         }
         isLoadingInsights = false
 
+        // Update lastSyncedAt only when at least some responses came from the backend.
+        // This ensures offline/cache reads don't incorrectly look "fresh".
+        if remoteSuccessCount > 0 {
+            lastSyncedAt = Date()
+        }
+        
         // Prewarm cache for common ranges (fire-and-forget)
         Task { await prewarmAnalyticsCache() }
-        lastAnalyticsRefreshAt = Date()
     }
 
     // MARK: - Foreground refresh
     func refreshOnForegroundIfStale() {
-        guard useRemote && networkMonitor.isOnline else { return }
-        if let last = lastAnalyticsRefreshAt, Date().timeIntervalSince(last) < foregroundRefreshThresholdSeconds {
+        guard networkMonitor.isOnline else { return }
+        if let last = lastSyncedAt, Date().timeIntervalSince(last) < foregroundRefreshThresholdSeconds {
             return
         }
         Task { await silentRefresh() }
@@ -346,12 +321,12 @@ final class StatisticsViewModel: ObservableObject {
         }
 
         if anyRemoteSuccess {
-            lastAnalyticsRefreshAt = Date()
+            lastSyncedAt = Date()
         }
     }
 
     private func prewarmAnalyticsCache() async {
-        guard useRemote && networkMonitor.isOnline else { return }
+        guard networkMonitor.isOnline else { return }
         let monthRange = loadPeriodRange(.month, customStart: Date(), customEnd: Date())
         let weekRange = loadPeriodRange(.week, customStart: Date(), customEnd: Date())
         let distRange = loadPeriodRange(.month, customStart: Date(), customEnd: Date())
@@ -361,12 +336,12 @@ final class StatisticsViewModel: ObservableObject {
         _ = try? await analyticsRepository.fetchQualityDistribution(range: distRange)
     }
 
-    // MARK: - Offline immediate refresh (cache → local)
+    // MARK: - Offline immediate refresh (cache only)
     func refreshOfflineImmediate() async {
-        await loadOfflineFromCacheThenLocal()
+        await loadOfflineFromCache()
     }
 
-    private func loadOfflineFromCacheThenLocal() async {
+    private func loadOfflineFromCache() async {
         // Ensure no shimmers while offline
         isLoadingOverview = false
         isLoadingTrends = false
@@ -375,16 +350,12 @@ final class StatisticsViewModel: ObservableObject {
         isLoadingWeekly = false
         isLoadingInsights = false
 
-        // Prepare local data for fallback
-        loadAllEvents()
-        calculateBasicStatistics()
-
         let overviewRange = loadPeriodRange(.allTime, customStart: Date.distantPast, customEnd: Date())
         let trendsRange = loadPeriodRange(qualityTrendsPeriod, customStart: qualityTrendsCustomStartDate, customEnd: qualityTrendsCustomEndDate)
         let hourlyRange = loadPeriodRange(dailyPatternsPeriod, customStart: dailyPatternsCustomStartDate, customEnd: dailyPatternsCustomEndDate)
         let distRange = loadPeriodRange(qualityDistributionPeriod, customStart: qualityDistributionCustomStartDate, customEnd: qualityDistributionCustomEndDate)
 
-        // Overview: prefer cached, else keep local stats already set above
+        // Overview
         if let ov = try? await analyticsRepository.fetchOverview(range: overviewRange) {
             totalEvents = ov.data.stats.totalEvents
             thisWeekEvents = ov.data.stats.thisWeekEvents
@@ -392,67 +363,48 @@ final class StatisticsViewModel: ObservableObject {
             healthScore = ov.data.stats.healthScore
             healthScoreInterpretationServer = ov.data.interpretationLabel
             overviewSource = ov.source
-            debugPrint("[Analytics] Offline Overview source=\(overviewSource.rawValue)")
         } else {
-            overviewSource = .local
-            debugPrint("[Analytics] Offline Overview source=local (fallback)")
+            overviewSource = .cache
         }
 
         // Trends
         if let tr = try? await analyticsRepository.fetchQualityTrends(range: trendsRange) {
             qualityTrendData = tr.data
             trendsSource = tr.source
-            debugPrint("[Analytics] Offline Trends source=\(trendsSource.rawValue)")
         } else {
-            generateQualityTrends()
-            trendsSource = .local
-            debugPrint("[Analytics] Offline Trends source=local (fallback)")
+            trendsSource = .cache
         }
 
         // Hourly
         if let ho = try? await analyticsRepository.fetchHourly(range: hourlyRange) {
             hourlyData = ho.data
             hourlySource = ho.source
-            debugPrint("[Analytics] Offline Hourly source=\(hourlySource.rawValue)")
         } else {
-            generateHourlyPatterns()
-            hourlySource = .local
-            debugPrint("[Analytics] Offline Hourly source=local (fallback)")
+            hourlySource = .cache
         }
 
         // Distribution
         if let di = try? await analyticsRepository.fetchQualityDistribution(range: distRange) {
             qualityDistribution = di.data
             distributionSource = di.source
-            debugPrint("[Analytics] Offline Distribution source=\(distributionSource.rawValue)")
         } else {
-            generateQualityDistribution()
-            distributionSource = .local
-            debugPrint("[Analytics] Offline Distribution source=local (fallback)")
+            distributionSource = .cache
         }
 
         // Weekly
         if let we = try? await analyticsRepository.fetchWeekly() {
             weeklyData = we.data
             weeklySource = we.source
-            debugPrint("[Analytics] Offline Weekly source=\(weeklySource.rawValue)")
         } else {
-            generateWeeklyData()
-            weeklySource = .local
-            debugPrint("[Analytics] Offline Weekly source=local (fallback)")
+            weeklySource = .cache
         }
 
         // Insights
         if let ins = try? await analyticsRepository.fetchInsights(range: trendsRange) {
             healthInsights = ins.data
             insightsSource = ins.source
-            debugPrint("[Analytics] Offline Insights source=\(insightsSource.rawValue)")
         } else {
-            // Use computed basic statistics safely (recompute if needed)
-            let stats = basicStatistics ?? calculateStatisticsUseCase.execute(events: allEvents)
-            healthInsights = generateHealthInsightsUseCase.execute(statistics: stats, events: allEvents)
-            insightsSource = .local
-            debugPrint("[Analytics] Offline Insights source=local (fallback)")
+            insightsSource = .cache
         }
     }
 
@@ -462,11 +414,8 @@ final class StatisticsViewModel: ObservableObject {
             .debounce(for: .milliseconds(350), scheduler: DispatchQueue.main)
             .sink { [weak self] _ in
                 guard let self else { return }
-                if self.useRemote && self.networkMonitor.isOnline {
-                    Task { await self.fetchRemoteQualityTrends() }
-                } else {
-                    self.generateQualityTrends()
-                }
+                // Repo already handles cache fallback; ViewModel never performs local calculations.
+                Task { await self.fetchRemoteQualityTrends() }
             }
             .store(in: &cancellables)
 
@@ -475,11 +424,8 @@ final class StatisticsViewModel: ObservableObject {
             .debounce(for: .milliseconds(350), scheduler: DispatchQueue.main)
             .sink { [weak self] _ in
                 guard let self else { return }
-                if self.useRemote && self.networkMonitor.isOnline {
-                    Task { await self.fetchRemoteHourly() }
-                } else {
-                    self.generateHourlyPatterns()
-                }
+                // Repo already handles cache fallback; ViewModel never performs local calculations.
+                Task { await self.fetchRemoteHourly() }
             }
             .store(in: &cancellables)
 
@@ -488,11 +434,8 @@ final class StatisticsViewModel: ObservableObject {
             .debounce(for: .milliseconds(350), scheduler: DispatchQueue.main)
             .sink { [weak self] _ in
                 guard let self else { return }
-                if self.useRemote && self.networkMonitor.isOnline {
-                    Task { await self.fetchRemoteDistribution() }
-                } else {
-                    self.generateQualityDistribution()
-                }
+                // Repo already handles cache fallback; ViewModel never performs local calculations.
+                Task { await self.fetchRemoteDistribution() }
             }
             .store(in: &cancellables)
     }
@@ -547,65 +490,14 @@ final class StatisticsViewModel: ObservableObject {
         isLoadingInsights = false
     }
     
-    // MARK: - Private Methods
-    private func loadAllEvents() {
-        allEvents = getAllEventsUseCase.execute()
-    }
-    
-    private func calculateBasicStatistics() {
-        basicStatistics = calculateStatisticsUseCase.execute(events: allEvents)
-        
-        // Update published properties
-        totalEvents = basicStatistics?.totalEvents ?? 0
-        thisWeekEvents = basicStatistics?.thisWeekEvents ?? 0
-        averageDaily = basicStatistics?.averageDaily ?? 0.0
-        healthScore = basicStatistics?.healthScore ?? 0.0
-    }
-    
-    private func generateQualityTrends() {
-        qualityTrendData = generateQualityTrendsUseCase.execute(
-            events: allEvents,
-            period: qualityTrendsPeriod,
-            customStartDate: qualityTrendsCustomStartDate,
-            customEndDate: qualityTrendsCustomEndDate
-        )
-    }
-    
-    private func generateHourlyPatterns() {
-        hourlyData = analyzeHourlyPatternsUseCase.execute(
-            events: allEvents,
-            period: dailyPatternsPeriod,
-            customStartDate: dailyPatternsCustomStartDate,
-            customEndDate: dailyPatternsCustomEndDate
-        )
-    }
-    
-    private func generateQualityDistribution() {
-        qualityDistribution = generateQualityDistributionUseCase.execute(
-            events: allEvents,
-            period: qualityDistributionPeriod,
-            customStartDate: qualityDistributionCustomStartDate,
-            customEndDate: qualityDistributionCustomEndDate
-        )
-    }
-    
-    private func generateWeeklyData() {
-        weeklyData = generateWeeklyDataUseCase.execute(events: allEvents)
-    }
-    
-    private func generateHealthInsights() {
-        guard let stats = basicStatistics else { return }
-        healthInsights = generateHealthInsightsUseCase.execute(statistics: stats, events: allEvents)
-    }
-    
     func updateQualityTrendsCustomDateRange(startDate: Date, endDate: Date) {
         qualityTrendsCustomStartDate = startDate
         qualityTrendsCustomEndDate = endDate
         if qualityTrendsPeriod == .custom {
-            if useRemote && networkMonitor.isOnline {
+            if networkMonitor.isOnline {
                 Task { await fetchRemoteQualityTrends() }
             } else {
-                generateQualityTrends()
+                Task { await fetchRemoteQualityTrends() } // Repo handles cache fallback
             }
         }
     }
@@ -614,10 +506,10 @@ final class StatisticsViewModel: ObservableObject {
         dailyPatternsCustomStartDate = startDate
         dailyPatternsCustomEndDate = endDate
         if dailyPatternsPeriod == .custom {
-            if useRemote && networkMonitor.isOnline {
+            if networkMonitor.isOnline {
                 Task { await fetchRemoteHourly() }
             } else {
-                generateHourlyPatterns()
+                Task { await fetchRemoteHourly() } // Repo handles cache fallback
             }
         }
     }
@@ -626,16 +518,14 @@ final class StatisticsViewModel: ObservableObject {
         qualityDistributionCustomStartDate = startDate
         qualityDistributionCustomEndDate = endDate
         if qualityDistributionPeriod == .custom {
-            if useRemote && networkMonitor.isOnline {
+            if networkMonitor.isOnline {
                 Task { await fetchRemoteDistribution() }
             } else {
-                generateQualityDistribution()
+                Task { await fetchRemoteDistribution() } // Repo handles cache fallback
             }
         }
     }
 }
-
-
 
 // MARK: - PeeQuality Extension
 extension PeeQuality {
@@ -649,4 +539,3 @@ extension PeeQuality {
         }
     }
 } 
- 
