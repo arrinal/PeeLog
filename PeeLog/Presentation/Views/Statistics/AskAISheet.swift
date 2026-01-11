@@ -12,6 +12,7 @@ struct AskAISheet: View {
     let onSubmit: (String) async throws -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @FocusState private var isTextEditorFocused: Bool
     @State private var question: String = ""
     @State private var isSubmitting: Bool = false
     @State private var errorMessage: String?
@@ -39,20 +40,40 @@ struct AskAISheet: View {
             }
             .padding(.horizontal)
             .padding(.bottom)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                isTextEditorFocused = false
+            }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Cancel") { dismiss() }
+                        .foregroundColor(.blue)
+                }
+                ToolbarItem(placement: .keyboard) {
+                    HStack {
+                        Spacer()
+                        Button("Done") {
+                            isTextEditorFocused = false
+                        }
+                        .fontWeight(.semibold)
+                    }
                 }
             }
         }
     }
 
     private var header: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "sparkles")
-                .font(.system(size: 40))
-                .foregroundColor(.purple)
+        VStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(Color.blue.opacity(0.1))
+                    .frame(width: 72, height: 72)
+
+                Image(systemName: "sparkles")
+                    .font(.system(size: 32))
+                    .foregroundColor(.blue)
+            }
 
             Text("Ask AI")
                 .font(.title2)
@@ -73,13 +94,15 @@ struct AskAISheet: View {
                 .fontWeight(.medium)
 
             TextEditor(text: $question)
+                .focused($isTextEditorFocused)
                 .frame(height: 110)
                 .padding(8)
+                .scrollContentBackground(.hidden)
                 .background(Color(.secondarySystemBackground))
                 .cornerRadius(12)
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.purple.opacity(0.25), lineWidth: 1)
+                        .stroke(isTextEditorFocused ? Color.blue : Color.blue.opacity(0.25), lineWidth: isTextEditorFocused ? 2 : 1)
                 )
 
             Text("\(question.count)/500")
@@ -90,19 +113,27 @@ struct AskAISheet: View {
 
     private var exampleQuestions: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Examples")
+            Text("Try asking:")
                 .font(.caption)
                 .foregroundColor(.secondary)
 
             ForEach(Self.examples, id: \.self) { example in
                 Button {
                     question = example
+                    isTextEditorFocused = false
                 } label: {
-                    Text(example)
-                        .font(.caption)
-                        .foregroundColor(.purple)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.vertical, 4)
+                    HStack(spacing: 8) {
+                        Image(systemName: "text.bubble")
+                            .font(.caption)
+                        Text(example)
+                            .font(.caption)
+                    }
+                    .foregroundColor(.blue)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 6)
+                    .padding(.horizontal, 10)
+                    .background(Color.blue.opacity(0.08))
+                    .cornerRadius(8)
                 }
             }
         }
@@ -111,6 +142,7 @@ struct AskAISheet: View {
 
     private var submitButton: some View {
         Button {
+            isTextEditorFocused = false
             Task { await submit() }
         } label: {
             HStack(spacing: 10) {
@@ -126,7 +158,7 @@ struct AskAISheet: View {
             }
             .frame(maxWidth: .infinity)
             .padding()
-            .background(isSubmitEnabled ? Color.purple : Color.gray)
+            .background(isSubmitEnabled ? Color.blue : Color.gray.opacity(0.5))
             .foregroundColor(.white)
             .cornerRadius(12)
         }

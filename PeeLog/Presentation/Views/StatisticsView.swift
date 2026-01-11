@@ -29,13 +29,15 @@ struct StatisticsView: View {
                     } else if viewModel.isDataStale {
                         staleDataBanner
                     }
-                    
+
                     summaryCardsSection
+                    aiInsightsSection
                     qualityTrendsSection
                     dailyPatternsSection
                     qualityDistributionSection
                     weeklyOverviewSection
-                    aiInsightsSection
+
+                    medicalDisclaimerSection
                 }
                 .padding(.horizontal)
                 .padding(.bottom, 100)
@@ -47,6 +49,7 @@ struct StatisticsView: View {
                         Text("Last synced \(lastSynced.formatted(.relative(presentation: .named)))")
                             .font(.caption2)
                             .foregroundColor(.secondary)
+                            .padding(.leading, 5)
                     }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -85,6 +88,7 @@ struct StatisticsView: View {
                 viewModel.showingQualityTrendsCustomDatePicker = false
                 viewModel.showingDailyPatternsCustomDatePicker = false
                 viewModel.showingQualityDistributionCustomDatePicker = false
+                viewModel.showingAverageDailyCustomDatePicker = false
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .eventsStoreDidReset)) { _ in
@@ -142,6 +146,17 @@ struct StatisticsView: View {
                 onApply: { startDate, endDate in
                     viewModel.updateQualityDistributionCustomDateRange(startDate: startDate, endDate: endDate)
                     viewModel.showingQualityDistributionCustomDatePicker = false
+                }
+            )
+        }
+        .sheet(isPresented: $viewModel.showingAverageDailyCustomDatePicker) {
+            CustomDateRangeSheet(
+                title: "Average Daily Custom Range",
+                startDate: $viewModel.averageDailyCustomStartDate,
+                endDate: $viewModel.averageDailyCustomEndDate,
+                onApply: { startDate, endDate in
+                    viewModel.updateAverageDailyCustomDateRange(startDate: startDate, endDate: endDate)
+                    viewModel.showingAverageDailyCustomDatePicker = false
                 }
             )
         }
@@ -263,21 +278,21 @@ struct StatisticsView: View {
                         icon: "calendar.circle.fill"
                     )
                     
-                    StatisticCard(
-                        title: "Average Daily",
-                        value: String(format: "%.1f", viewModel.averageDaily),
-                        subtitle: "Events per day",
-                        color: .orange,
-                        icon: "chart.line.uptrend.xyaxis.circle.fill"
+                    AverageDailyCard(
+                        value: viewModel.averageDaily,
+                        activeDays: viewModel.averageDailyActiveDays,
+                        period: $viewModel.averageDailyPeriod,
+                        isLoading: viewModel.isLoadingAverageDaily,
+                        onCustomRangeTap: {
+                            viewModel.showingAverageDailyCustomDatePicker = true
+                        }
                     )
                     
-                    StatisticCard(
-                        title: "Health Score",
-                        value: "\(Int(viewModel.healthScore * 100))%",
-                        subtitle: "Hydration level",
-                        color: viewModel.healthScore > 0.7 ? .green : viewModel.healthScore > 0.4 ? .orange : .red,
-                        icon: "heart.circle.fill",
-                        interpretation: viewModel.healthScoreInterpretation
+                    HealthScoreCard(
+                        healthScore: viewModel.healthScore,
+                        activeDays: viewModel.activeDays,
+                        interpretation: viewModel.healthScoreInterpretation,
+                        isLoading: viewModel.isLoadingOverview
                     )
                 }
             }
@@ -296,7 +311,7 @@ struct StatisticsView: View {
                     Button("Last 30 Days") { viewModel.qualityTrendsPeriod = .month }
                     Button("Last 90 Days") { viewModel.qualityTrendsPeriod = .quarter }
                     Button("All Time") { viewModel.qualityTrendsPeriod = .allTime }
-                    Button("Custom Range") { 
+                    Button("Custom Range") {
                         viewModel.qualityTrendsPeriod = .custom
                         viewModel.showingQualityTrendsCustomDatePicker = true
                     }
@@ -309,28 +324,75 @@ struct StatisticsView: View {
                     .foregroundColor(.secondary)
                 }
             }
-            
+
             Text("Track your hydration quality over time. A higher quality score indicates better hydration, while declining trends may suggest you need to drink more water.")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            
+
             if viewModel.isLoadingTrends {
                 RoundedRectangle(cornerRadius: 16)
                     .fill(Color(.systemGray6))
                     .frame(height: 200)
                     .shimmering()
             } else if !viewModel.qualityTrendData.isEmpty {
+                let dataCount = viewModel.qualityTrendData.count
+                let showPoints = dataCount <= 15
+
                 Chart(viewModel.qualityTrendData) { dataPoint in
                     LineMark(
                         x: .value("Date", dataPoint.date),
-                        y: .value("Quality Score", dataPoint.averageQuality)
+                        y: .value("Quality", dataPoint.averageQuality)
                     )
                     .foregroundStyle(.blue)
-                    .lineStyle(StrokeStyle(lineWidth: 3))
+                    .lineStyle(StrokeStyle(lineWidth: 2))
+
+                    if showPoints {
+                        PointMark(
+                            x: .value("Date", dataPoint.date),
+                            y: .value("Quality", dataPoint.averageQuality)
+                        )
+                        .foregroundStyle(.blue)
+                        .symbolSize(40)
+                    }
                 }
                 .frame(height: 200)
-                .chartYScale(domain: 0...5)
+                .chartYScale(domain: 0...6)
+                .chartXAxis {
+                    AxisMarks(values: .automatic(desiredCount: min(dataCount, 5))) { value in
+                        AxisGridLine()
+                        AxisTick()
+                        AxisValueLabel {
+                            if let date = value.as(Date.self) {
+                                Text(formatDateForAxis(date, dataCount: dataCount))
+                                    .font(.system(size: 9))
+                            }
+                        }
+                    }
+                }
+                .chartYAxis {
+                    AxisMarks(position: .trailing, values: [1, 2, 3, 4, 5]) { value in
+                        AxisGridLine()
+                        AxisTick()
+                        AxisValueLabel {
+                            if let v = value.as(Int.self) {
+                                Text(qualityScoreLabel(for: v))
+                                    .font(.system(size: 9))
+                            }
+                        }
+                    }
+                }
+
+                // Chart legend
+                HStack(spacing: 4) {
+                    Image(systemName: "arrow.up")
+                        .font(.caption2)
+                        .foregroundColor(.green)
+                    Text("Higher = Better (5 = Pale Yellow, 1 = Amber)")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             } else {
                 EmptyChartView(message: "No quality data available")
             }
@@ -340,7 +402,26 @@ struct StatisticsView: View {
         .cornerRadius(16)
         .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 4)
     }
-    
+
+    private func qualityScoreLabel(for value: Int) -> String {
+        // Evenly spaced scale: 5=Pale(best), 4=Clear, 3=Yellow, 2=Dark, 1=Amber(worst)
+        switch value {
+        case 5: return "Pale"
+        case 4: return "Clear"
+        case 3: return "Yellow"
+        case 2: return "Dark"
+        case 1: return "Amber"
+        default: return "\(value)"
+        }
+    }
+
+    private func formatDateForAxis(_ date: Date, dataCount: Int) -> String {
+        let formatter = DateFormatter()
+        // Consistent format across all time ranges: "MMM d" (e.g., "Jan 3")
+        formatter.dateFormat = "MMM d"
+        return formatter.string(from: date)
+    }
+
     private var dailyPatternsSection: some View {
         VStack(spacing: 16) {
             HStack {
@@ -353,7 +434,7 @@ struct StatisticsView: View {
                     Button("Last 30 Days") { viewModel.dailyPatternsPeriod = .month }
                     Button("Last 90 Days") { viewModel.dailyPatternsPeriod = .quarter }
                     Button("All Time") { viewModel.dailyPatternsPeriod = .allTime }
-                    Button("Custom Range") { 
+                    Button("Custom Range") {
                         viewModel.dailyPatternsPeriod = .custom
                         viewModel.showingDailyPatternsCustomDatePicker = true
                     }
@@ -366,12 +447,12 @@ struct StatisticsView: View {
                     .foregroundColor(.secondary)
                 }
             }
-            
+
             Text("Discover when you urinate most frequently throughout the day. This helps identify your natural rhythm and optimal hydration timing.")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            
+
             if viewModel.isLoadingHourly {
                 RoundedRectangle(cornerRadius: 16)
                     .fill(Color(.systemGray6))
@@ -387,6 +468,26 @@ struct StatisticsView: View {
                     .cornerRadius(4)
                 }
                 .frame(height: 150)
+                .chartXScale(domain: 0...23)
+                .chartXAxis {
+                    AxisMarks(values: [0, 6, 12, 18]) { value in
+                        AxisGridLine()
+                        AxisTick()
+                        AxisValueLabel {
+                            if let hour = value.as(Int.self) {
+                                Text(hourAxisLabel(for: hour))
+                                    .font(.caption2)
+                            }
+                        }
+                    }
+                }
+                .chartYAxis {
+                    AxisMarks { _ in
+                        AxisGridLine()
+                        AxisTick()
+                        AxisValueLabel()
+                    }
+                }
             } else {
                 EmptyChartView(message: "No hourly data available")
             }
@@ -395,6 +496,16 @@ struct StatisticsView: View {
         .background(Color(.systemBackground))
         .cornerRadius(16)
         .shadow(color: .black.opacity(0.1), radius: 8, x: 0, y: 4)
+    }
+
+    private func hourAxisLabel(for hour: Int) -> String {
+        switch hour {
+        case 0: return "12am"
+        case 6: return "6am"
+        case 12: return "12pm"
+        case 18: return "6pm"
+        default: return "\(hour)"
+        }
     }
     
     private var qualityDistributionSection: some View {
@@ -628,8 +739,26 @@ struct StatisticsView: View {
             isLoadingAI: viewModel.isLoadingAIInsights,
             legacyHealthInsights: viewModel.healthInsights,
             isLoadingLegacy: viewModel.isLoadingInsights,
+            activeDays: viewModel.activeDays,
             onAskAITapped: { isAskAISheetPresented = true }
         )
+    }
+
+    private var medicalDisclaimerSection: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "info.circle")
+                .font(.caption)
+                .foregroundColor(.secondary)
+            Text("This app provides general wellness tracking only. Normal urination is 6-8 times daily. Consult a healthcare provider for medical advice.")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.leading)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(.systemGray6).opacity(0.5))
+        .cornerRadius(8)
     }
 }
 
@@ -691,6 +820,184 @@ struct StatisticCard: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding()
+        .background(color.opacity(0.1))
+        .cornerRadius(16)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(color.opacity(0.3), lineWidth: 1)
+        )
+    }
+}
+
+// MARK: - Average Daily Card with Time Picker and Sparse Data Handling
+struct AverageDailyCard: View {
+    let value: Double
+    let activeDays: Int
+    @Binding var period: TimePeriod
+    let isLoading: Bool
+    let onCustomRangeTap: () -> Void
+
+    private let minActiveDays = 3
+
+    private var hasEnoughData: Bool {
+        activeDays >= minActiveDays
+    }
+
+    private var color: Color {
+        hasEnoughData ? .orange : .gray
+    }
+
+    private var displayValue: String {
+        guard hasEnoughData else { return "--" }
+        return String(format: "%.1f", value)
+    }
+
+    private var subtitle: String {
+        guard hasEnoughData else { return "Log more days for average" }
+        return "Based on \(activeDays) days"
+    }
+
+    var body: some View {
+        VStack(spacing: 12) {
+            HStack {
+                Image(systemName: "chart.line.uptrend.xyaxis.circle.fill")
+                    .font(.title2)
+                    .foregroundColor(color)
+
+                Spacer()
+
+                Menu {
+                    Button("Last 7 Days") { period = .week }
+                    Button("Last 30 Days") { period = .month }
+                    Button("Last 90 Days") { period = .quarter }
+                    Button("All Time") { period = .allTime }
+                    Button("Custom Range") {
+                        period = .custom
+                        onCustomRangeTap()
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(period.shortLabel)
+                            .font(.caption2)
+                        Image(systemName: "chevron.down")
+                            .font(.caption2)
+                    }
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(
+                        Capsule()
+                            .fill(Color(.systemGray5))
+                    )
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                if isLoading {
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color(.systemGray5))
+                        .frame(height: 24)
+                        .shimmering()
+                } else {
+                    Text(displayValue)
+                        .font(.title)
+                        .fontWeight(.bold)
+                        .foregroundColor(hasEnoughData ? .primary : .secondary)
+                }
+
+                Text("Average Daily")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundColor(.primary)
+
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding()
+        .background(color.opacity(0.1))
+        .cornerRadius(16)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(color.opacity(0.3), lineWidth: 1)
+        )
+    }
+}
+
+// MARK: - Health Score Card with Sparse Data Handling
+struct HealthScoreCard: View {
+    let healthScore: Double
+    let activeDays: Int
+    let interpretation: String
+    let isLoading: Bool
+
+    private let minActiveDays = 3
+
+    private var hasEnoughData: Bool {
+        activeDays >= minActiveDays
+    }
+
+    private var color: Color {
+        guard hasEnoughData else { return .gray }
+        if healthScore > 0.7 { return .green }
+        if healthScore > 0.4 { return .orange }
+        return .red
+    }
+
+    private var displayValue: String {
+        guard hasEnoughData else { return "--" }
+        return "\(Int(healthScore * 100))%"
+    }
+
+    private var subtitle: String {
+        guard hasEnoughData else { return "Log more days for score" }
+        return "Based on \(activeDays) days"
+    }
+
+    var body: some View {
+        VStack(spacing: 12) {
+            HStack {
+                Image(systemName: "heart.circle.fill")
+                    .font(.title2)
+                    .foregroundColor(color)
+                Spacer()
+                if hasEnoughData && !interpretation.isEmpty {
+                    Text(interpretation)
+                        .font(.caption2)
+                        .fontWeight(.medium)
+                        .foregroundColor(color)
+                        .padding(.top, 2)
+                }
+                
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                if isLoading {
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color(.systemGray5))
+                        .frame(height: 24)
+                        .shimmering()
+                } else {
+                    Text(displayValue)
+                        .font(.title)
+                        .fontWeight(.bold)
+                        .foregroundColor(hasEnoughData ? .primary : .secondary)
+                }
+
+                Text("Health Score")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundColor(.primary)
+
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }

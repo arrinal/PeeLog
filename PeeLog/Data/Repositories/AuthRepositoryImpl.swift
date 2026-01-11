@@ -89,7 +89,15 @@ final class AuthRepositoryImpl: AuthRepository {
             if firebaseAuthService.getCurrentUser() != nil {
                 await handleFirebaseSignIn()
             } else {
-                updateAuthState(.unauthenticated)
+                // IMPORTANT: Before setting unauthenticated, check if we have a local user.
+                // This handles the offline/force-close case where Firebase session isn't restored yet
+                // but the user was previously logged in and has local data.
+                if let localUser = await getMostRecentLocalUser() {
+                    currentUserSubject.send(localUser)
+                    updateAuthState(.authenticated(localUser))
+                } else {
+                    updateAuthState(.unauthenticated)
+                }
             }
         }
     }
@@ -201,9 +209,19 @@ final class AuthRepositoryImpl: AuthRepository {
             return
         }
 
-        // IMPORTANT (offline behavior): a transient Firebase state change while offline should NOT
-        // kick a previously logged-in user back to the login screen. Prefer last local user.
-        if !NetworkMonitor.shared.isOnline, let localUser = await getMostRecentLocalUser() {
+        // IMPORTANT: When Firebase reports no user but we have a local user, prefer the local user.
+        // This handles multiple scenarios:
+        // 1. Offline after force close - Firebase session not restored yet
+        // 2. Transient Firebase state change while offline
+        // 3. Network monitor not yet updated (race condition on app start)
+        //
+        // We no longer rely solely on NetworkMonitor.shared.isOnline because:
+        // - NWPathMonitor updates asynchronously
+        // - On cold start, isOnline may still be true (default) before update arrives
+        //
+        // If a local user exists and we didn't explicitly sign out, keep them authenticated.
+        if let localUser = await getMostRecentLocalUser() {
+            currentUserSubject.send(localUser)
             updateAuthState(.authenticated(localUser))
             return
         }

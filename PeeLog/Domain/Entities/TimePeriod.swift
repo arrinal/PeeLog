@@ -23,6 +23,22 @@ enum TimePeriod: String, CaseIterable {
     var displayName: String {
         return self.rawValue
     }
+
+    /// A shorter label for compact UI elements like pills/chips
+    var shortLabel: String {
+        switch self {
+        case .today: return "Today"
+        case .yesterday: return "Yesterday"
+        case .last3Days: return "3 Days"
+        case .lastWeek: return "1 Week"
+        case .lastMonth: return "1 Month"
+        case .week: return "7 Days"
+        case .month: return "30 Days"
+        case .quarter: return "90 Days"
+        case .allTime: return "All Time"
+        case .custom: return "Custom"
+        }
+    }
     
     var dateRange: (start: Date, end: Date) {
         let calendar = CalendarUtility.current

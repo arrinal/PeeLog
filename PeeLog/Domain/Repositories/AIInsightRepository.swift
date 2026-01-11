@@ -7,12 +7,23 @@
 
 import Foundation
 
+/// Status of Ask AI rate limit
+struct AskAIStatus: Sendable {
+    let canAsk: Bool
+    let hoursRemaining: Int
+}
+
 protocol AIInsightRepository: AnyObject, Sendable {
     func fetchDailyInsight() async throws -> AIInsight?
     func fetchWeeklyInsight() async throws -> AIInsight?
     func fetchCustomInsight() async throws -> AIInsight?
     func askAI(question: String) async throws -> AskAIResponse
-    func canAskAIToday() async -> Bool
+
+    /// Check if user can ask AI (uses server-side 24h rolling window)
+    func checkAskAIStatus() async -> AskAIStatus
+
+    /// Save device timezone to server for timezone-aware daily insights
+    func saveTimezone() async throws
 }
 
 enum AIInsightRepositoryError: Error, LocalizedError, Sendable {

@@ -49,7 +49,8 @@ final class AnalyticsRepositoryImpl: AnalyticsRepository {
                 totalEvents: resp.totalEvents,
                 thisWeekEvents: resp.thisWeekEvents,
                 averageDaily: resp.averageDaily,
-                healthScore: resp.healthScore
+                healthScore: resp.healthScore,
+                activeDays: resp.activeDaysOrZero
             )
             let dto = OverviewFromServer(
                 stats: stats,
@@ -63,7 +64,8 @@ final class AnalyticsRepositoryImpl: AnalyticsRepository {
                     totalEvents: cached.totalEvents,
                     thisWeekEvents: cached.thisWeekEvents,
                     averageDaily: cached.averageDaily,
-                    healthScore: cached.healthScore
+                    healthScore: cached.healthScore,
+                    activeDays: cached.activeDaysOrZero
                 )
                 let dto = OverviewFromServer(
                     stats: stats,
@@ -76,17 +78,23 @@ final class AnalyticsRepositoryImpl: AnalyticsRepository {
         }
     }
     
+    private func parseISODate(_ isoString: String) -> Date {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.date(from: isoString) ?? Date()
+    }
+
     func fetchQualityTrends(range: AnalyticsRange) async throws -> Sourced<[QualityTrendPoint]> {
         let pr = toPeriodRange(range)
         let uid = try await requireUid()
         do {
             let resp = try await service.fetchQualityTrends(range: pr)
             try await cache.saveQualityTrends(uid: uid, period: pr.period, startISO: pr.startDate, endISO: pr.endDate, tz: pr.timeZone, response: resp)
-            let data = resp.map { QualityTrendPoint(date: ISO8601DateFormatter().date(from: $0.date) ?? Date(), averageQuality: $0.averageQuality) }
+            let data = resp.map { QualityTrendPoint(date: parseISODate($0.date), averageQuality: $0.averageQuality) }
             return Sourced(data: data, source: .remote)
         } catch {
             if let cached = try await cache.loadQualityTrends(uid: uid, period: pr.period, startISO: pr.startDate, endISO: pr.endDate, tz: pr.timeZone) {
-                let data = cached.map { QualityTrendPoint(date: ISO8601DateFormatter().date(from: $0.date) ?? Date(), averageQuality: $0.averageQuality) }
+                let data = cached.map { QualityTrendPoint(date: parseISODate($0.date), averageQuality: $0.averageQuality) }
                 return Sourced(data: data, source: .cache)
             }
             throw AnalyticsRepositoryError.noCacheAvailable(section: .trends, underlyingDescription: error.localizedDescription)

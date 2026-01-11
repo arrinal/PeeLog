@@ -34,18 +34,54 @@ final class AIInsightRepositoryImpl: AIInsightRepository, @unchecked Sendable {
         return try await fetchInsight(uid: uid, docId: "custom")
     }
 
-    func canAskAIToday() async -> Bool {
-        guard let uid = await AuthHelper.currentUid(), !uid.isEmpty else { return false }
-
-        let today = Self.utcDayKey(Date())
-        let ref = db.collection("users").document(uid).collection("aiRateLimit").document(today)
+    func checkAskAIStatus() async -> AskAIStatus {
+        guard let _ = await AuthHelper.currentUid() else {
+            return AskAIStatus(canAsk: false, hoursRemaining: 0)
+        }
 
         do {
-            let snap = try await getDocument(documentRef: ref)
-            return !(snap?.exists ?? false)
+            let result: HTTPSCallableResult = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<HTTPSCallableResult, Error>) in
+                Task { @MainActor in
+                    let callable = self.functions.httpsCallable("checkAskAIStatus")
+                    callable.call([:]) { result, error in
+                        if let error { continuation.resume(throwing: error) }
+                        else if let result { continuation.resume(returning: result) }
+                        else { continuation.resume(throwing: AIInsightRepositoryError.invalidResponse) }
+                    }
+                }
+            }
+
+            guard let dict = result.data as? [String: Any],
+                  let canAsk = dict["canAsk"] as? Bool else {
+                return AskAIStatus(canAsk: false, hoursRemaining: 0)
+            }
+
+            let hoursRemaining = dict["hoursRemaining"] as? Int ?? 0
+            return AskAIStatus(canAsk: canAsk, hoursRemaining: hoursRemaining)
         } catch {
-            // If Firestore is unavailable, play safe: disable Ask AI button
-            return false
+            // If backend is unavailable, play safe: disable Ask AI button
+            return AskAIStatus(canAsk: false, hoursRemaining: 0)
+        }
+    }
+
+    func saveTimezone() async throws {
+        _ = try await requireUid()
+
+        let timezone = TimeZone.current.identifier // e.g., "Asia/Jakarta"
+
+        do {
+            let _: HTTPSCallableResult = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<HTTPSCallableResult, Error>) in
+                Task { @MainActor in
+                    let callable = self.functions.httpsCallable("saveUserTimezone")
+                    callable.call(["timezone": timezone]) { result, error in
+                        if let error { continuation.resume(throwing: error) }
+                        else if let result { continuation.resume(returning: result) }
+                        else { continuation.resume(throwing: AIInsightRepositoryError.invalidResponse) }
+                    }
+                }
+            }
+        } catch {
+            throw mapFunctionsError(error)
         }
     }
 
@@ -132,14 +168,6 @@ private extension AIInsightRepositoryImpl {
                 else { continuation.resume(returning: snapshot) }
             }
         }
-    }
-
-    static func utcDayKey(_ date: Date) -> String {
-        var cal = Calendar(identifier: .gregorian)
-        cal.timeZone = TimeZone(secondsFromGMT: 0) ?? .gmt
-        let comps = cal.dateComponents([.year, .month, .day], from: date)
-        guard let y = comps.year, let m = comps.month, let d = comps.day else { return "unknown" }
-        return String(format: "%04d-%02d-%02d", y, m, d)
     }
 }
 

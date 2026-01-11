@@ -56,6 +56,9 @@ actor RemoteAnalyticsService {
         let averageDaily: Double
         let healthScore: Double
         let healthScoreInterpretation: Interpretation
+        let activeDays: Int?  // Number of unique days with events in the period (optional for backward compatibility)
+
+        var activeDaysOrZero: Int { activeDays ?? 0 }
     }
     
     struct QualityTrendPointResponse: Codable {

@@ -19,7 +19,13 @@ struct AIInsightsSection: View {
     let legacyHealthInsights: [HealthInsight]
     let isLoadingLegacy: Bool
 
+    /// Number of active days (days with at least 1 event) in the current period.
+    /// Used to determine if there's enough data for meaningful Quick Insights.
+    let activeDays: Int
+
     let onAskAITapped: () -> Void
+
+    private let minActiveDays = 3
 
     var body: some View {
         VStack(spacing: 16) {
@@ -44,7 +50,7 @@ struct AIInsightsSection: View {
     private var header: some View {
         HStack(spacing: 10) {
             Image(systemName: "sparkles")
-                .foregroundColor(.purple)
+                .foregroundColor(.blue)
 
             Text("AI Insights")
                 .font(.title2)
@@ -53,12 +59,23 @@ struct AIInsightsSection: View {
             Spacer()
 
             if canAskAI {
-                Button("Ask AI") {
+                Button {
                     onAskAITapped()
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "bubble.left.and.text.bubble.right.fill")
+                        Text("Ask AI")
+                    }
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(
+                        Capsule()
+                            .fill(Color.blue)
+                    )
                 }
-                .font(.subheadline)
-                .fontWeight(.semibold)
-                .foregroundColor(.purple)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -98,7 +115,7 @@ struct AIInsightsSection: View {
                     AIInsightCard(
                         title: "Your Question",
                         icon: "bubble.left.and.bubble.right.fill",
-                        iconColor: .purple,
+                        iconColor: .blue,
                         content: customInsight.content,
                         subtitle: customInsight.question,
                         timestamp: customInsight.generatedAt
@@ -122,6 +139,22 @@ struct AIInsightsSection: View {
 
             if isLoadingLegacy {
                 shimmerCards(count: 3)
+            } else if activeDays < minActiveDays {
+                // Insufficient data - encourage user to log more
+                VStack(spacing: 8) {
+                    Image(systemName: "chart.line.uptrend.xyaxis")
+                        .font(.largeTitle)
+                        .foregroundColor(.secondary.opacity(0.6))
+                    Text("Keep logging to get personalized insights")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                    Text("Log at least \(minActiveDays) days for accurate analysis")
+                        .font(.caption)
+                        .foregroundColor(.secondary.opacity(0.8))
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 20)
             } else if !legacyHealthInsights.isEmpty {
                 VStack(spacing: 12) {
                     ForEach(legacyHealthInsights, id: \.title) { insight in
@@ -174,6 +207,24 @@ private struct AIInsightCard: View {
         self.timestamp = timestamp
     }
 
+    private var relativeTimeString: String {
+        let now = Date()
+        let interval = now.timeIntervalSince(timestamp)
+
+        if interval < 60 {
+            return "Just now"
+        } else if interval < 3600 {
+            let minutes = Int(interval / 60)
+            return "\(minutes) min ago"
+        } else if interval < 86400 {
+            let hours = Int(interval / 3600)
+            return hours == 1 ? "1 hour ago" : "\(hours) hours ago"
+        } else {
+            let days = Int(interval / 86400)
+            return days == 1 ? "1 day ago" : "\(days) days ago"
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
@@ -183,13 +234,13 @@ private struct AIInsightCard: View {
                     .font(.subheadline)
                     .fontWeight(.semibold)
                 Spacer()
-                Text(timestamp, style: .relative)
+                Text(relativeTimeString)
                     .font(.caption2)
                     .foregroundColor(.secondary)
             }
 
             if let subtitle, !subtitle.isEmpty {
-                Text("“\(subtitle)”")
+                Text("\"\(subtitle)\"")
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .italic()

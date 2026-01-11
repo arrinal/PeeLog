@@ -21,6 +21,8 @@ final class StatisticsViewModel: ObservableObject {
     @Published var thisWeekEvents: Int = 0
     @Published var averageDaily: Double = 0.0
     @Published var healthScore: Double = 0.0
+    @Published var activeDays: Int = 0  // Number of unique days with events in the period (for health score)
+    @Published var averageDailyActiveDays: Int = 0  // Number of unique days for average daily (separate period)
     // Separate periods for each section
     @Published var qualityTrendsPeriod: TimePeriod = .quarter {
         didSet { /* debounced in setupDebounce() */ }
@@ -31,6 +33,10 @@ final class StatisticsViewModel: ObservableObject {
     }
     
     @Published var qualityDistributionPeriod: TimePeriod = .allTime {
+        didSet { /* debounced in setupDebounce() */ }
+    }
+
+    @Published var averageDailyPeriod: TimePeriod = .week {
         didSet { /* debounced in setupDebounce() */ }
     }
     
@@ -46,6 +52,10 @@ final class StatisticsViewModel: ObservableObject {
     @Published var qualityDistributionCustomStartDate: Date = CalendarUtility.daysAgo(7)
     @Published var qualityDistributionCustomEndDate: Date = Date()
     @Published var showingQualityDistributionCustomDatePicker: Bool = false
+
+    @Published var averageDailyCustomStartDate: Date = CalendarUtility.daysAgo(7)
+    @Published var averageDailyCustomEndDate: Date = Date()
+    @Published var showingAverageDailyCustomDatePicker: Bool = false
     
     @Published var qualityTrendData: [QualityTrendPoint] = []
     @Published var hourlyData: [HourlyData] = []
@@ -56,6 +66,7 @@ final class StatisticsViewModel: ObservableObject {
     
     // Loading flags per section
     @Published var isLoadingOverview: Bool = false
+    @Published var isLoadingAverageDaily: Bool = false
     @Published var isLoadingTrends: Bool = false
     @Published var isLoadingHourly: Bool = false
     @Published var isLoadingDistribution: Bool = false
@@ -64,6 +75,7 @@ final class StatisticsViewModel: ObservableObject {
     
     // Data source badges per section (future use)
     @Published var overviewSource: AnalyticsDataSource = .remote
+    @Published var averageDailySource: AnalyticsDataSource = .remote
     @Published var trendsSource: AnalyticsDataSource = .remote
     @Published var hourlySource: AnalyticsDataSource = .remote
     @Published var distributionSource: AnalyticsDataSource = .remote
@@ -77,6 +89,7 @@ final class StatisticsViewModel: ObservableObject {
     @Published var weeklyInsight: AIInsight?
     @Published var customInsight: AIInsight?
     @Published var canAskAI: Bool = false
+    @Published var askAIHoursRemaining: Int = 0
     @Published var isLoadingAIInsights: Bool = false
     
     var isDataStale: Bool {
@@ -84,6 +97,7 @@ final class StatisticsViewModel: ObservableObject {
         if !networkMonitor.isOnline { return true }
         return [
             overviewSource,
+            averageDailySource,
             trendsSource,
             hourlySource,
             distributionSource,
@@ -162,20 +176,29 @@ final class StatisticsViewModel: ObservableObject {
         let resp = try await aiInsightRepository.askAI(question: question)
         customInsight = AIInsight(type: .custom, content: resp.insight, generatedAt: Date(), question: question)
         canAskAI = false
+        askAIHoursRemaining = 24 // Just used, so 24 hours remaining
     }
 
     private func loadAIInsightsInternal() async {
         isLoadingAIInsights = true
 
+        // Save device timezone (fire-and-forget, don't block on this)
+        Task {
+            try? await aiInsightRepository.saveTimezone()
+        }
+
         async let dailyTask = try? aiInsightRepository.fetchDailyInsight()
         async let weeklyTask = try? aiInsightRepository.fetchWeeklyInsight()
         async let customTask = try? aiInsightRepository.fetchCustomInsight()
-        async let canAskTask = aiInsightRepository.canAskAIToday()
+        async let statusTask = aiInsightRepository.checkAskAIStatus()
 
         dailyInsight = await dailyTask
         weeklyInsight = await weeklyTask
         customInsight = await customTask
-        canAskAI = await canAskTask
+
+        let status = await statusTask
+        canAskAI = status.canAsk
+        askAIHoursRemaining = status.hoursRemaining
 
         isLoadingAIInsights = false
     }
@@ -209,34 +232,40 @@ final class StatisticsViewModel: ObservableObject {
     private func loadRemote() async {
         // set loading flags
         isLoadingOverview = true
+        isLoadingAverageDaily = true
         isLoadingTrends = true
         isLoadingHourly = true
         isLoadingDistribution = true
         isLoadingWeekly = true
         isLoadingInsights = true
 
-        let overviewRange = loadPeriodRange(.allTime, customStart: Date.distantPast, customEnd: Date())
+        let overviewRange = loadPeriodRange(.week, customStart: Date(), customEnd: Date())
+        let averageDailyRange = loadPeriodRange(averageDailyPeriod, customStart: averageDailyCustomStartDate, customEnd: averageDailyCustomEndDate)
         let trendsRange = loadPeriodRange(qualityTrendsPeriod, customStart: qualityTrendsCustomStartDate, customEnd: qualityTrendsCustomEndDate)
         let hourlyRange = loadPeriodRange(dailyPatternsPeriod, customStart: dailyPatternsCustomStartDate, customEnd: dailyPatternsCustomEndDate)
         let distRange = loadPeriodRange(qualityDistributionPeriod, customStart: qualityDistributionCustomStartDate, customEnd: qualityDistributionCustomEndDate)
 
         // Parallel fetches using async-let with Sourced<T> results
         async let ovTask = analyticsRepository.fetchOverview(range: overviewRange)
+        // Separate call for average daily with user-selectable period
+        async let avgDailyTask = analyticsRepository.fetchOverview(range: averageDailyRange)
         async let trTask = analyticsRepository.fetchQualityTrends(range: trendsRange)
         async let hoTask = analyticsRepository.fetchHourly(range: hourlyRange)
         async let diTask = analyticsRepository.fetchQualityDistribution(range: distRange)
         async let weTask = analyticsRepository.fetchWeekly()
-        async let insTask = analyticsRepository.fetchInsights(range: trendsRange)
+        // Use fixed week range for insights to match health score period
+        async let insTask = analyticsRepository.fetchInsights(range: overviewRange)
 
         var successCount = 0
         var remoteSuccessCount = 0
-        
+
+        // Overview - for totalEvents, thisWeekEvents, healthScore, activeDays (uses week period)
         do {
             let ov = try await ovTask
             totalEvents = ov.data.stats.totalEvents
             thisWeekEvents = ov.data.stats.thisWeekEvents
-            averageDaily = ov.data.stats.averageDaily
             healthScore = ov.data.stats.healthScore
+            activeDays = ov.data.stats.activeDays
             healthScoreInterpretationServer = ov.data.interpretationLabel
             overviewSource = ov.source
             successCount += 1
@@ -245,6 +274,18 @@ final class StatisticsViewModel: ObservableObject {
             overviewSource = .cache // Treat failure as cache/unavailable
         }
         isLoadingOverview = false
+
+        // Average Daily - separate call with user-selectable period
+        if let avgDaily = try? await avgDailyTask {
+            averageDaily = avgDaily.data.stats.averageDaily
+            averageDailyActiveDays = avgDaily.data.stats.activeDays
+            averageDailySource = avgDaily.source
+            successCount += 1
+            if avgDaily.source == .remote { remoteSuccessCount += 1 }
+        } else {
+            averageDailySource = .cache
+        }
+        isLoadingAverageDaily = false
 
         if let tr = try? await trTask {
             qualityTrendData = tr.data
@@ -316,27 +357,35 @@ final class StatisticsViewModel: ObservableObject {
     }
 
     private func silentRefresh() async {
-        let overviewRange = loadPeriodRange(.allTime, customStart: Date.distantPast, customEnd: Date())
+        let overviewRange = loadPeriodRange(.week, customStart: Date(), customEnd: Date())
+        let averageDailyRange = loadPeriodRange(averageDailyPeriod, customStart: averageDailyCustomStartDate, customEnd: averageDailyCustomEndDate)
         let trendsRange = loadPeriodRange(qualityTrendsPeriod, customStart: qualityTrendsCustomStartDate, customEnd: qualityTrendsCustomEndDate)
         let hourlyRange = loadPeriodRange(dailyPatternsPeriod, customStart: dailyPatternsCustomStartDate, customEnd: dailyPatternsCustomEndDate)
         let distRange = loadPeriodRange(qualityDistributionPeriod, customStart: qualityDistributionCustomStartDate, customEnd: qualityDistributionCustomEndDate)
 
         async let ovTask = analyticsRepository.fetchOverview(range: overviewRange)
+        async let avgDailyTask = analyticsRepository.fetchOverview(range: averageDailyRange)
         async let trTask = analyticsRepository.fetchQualityTrends(range: trendsRange)
         async let hoTask = analyticsRepository.fetchHourly(range: hourlyRange)
         async let diTask = analyticsRepository.fetchQualityDistribution(range: distRange)
         async let weTask = analyticsRepository.fetchWeekly()
-        async let insTask = analyticsRepository.fetchInsights(range: trendsRange)
+        // Use fixed week range for insights to match health score period
+        async let insTask = analyticsRepository.fetchInsights(range: overviewRange)
 
         var anyRemoteSuccess = false
 
         if let ov = try? await ovTask {
             totalEvents = ov.data.stats.totalEvents
             thisWeekEvents = ov.data.stats.thisWeekEvents
-            averageDaily = ov.data.stats.averageDaily
             healthScore = ov.data.stats.healthScore
+            activeDays = ov.data.stats.activeDays
             healthScoreInterpretationServer = ov.data.interpretationLabel
             if ov.source == .remote { overviewSource = .remote; anyRemoteSuccess = true }
+        }
+        if let avgDaily = try? await avgDailyTask {
+            averageDaily = avgDaily.data.stats.averageDaily
+            averageDailyActiveDays = avgDaily.data.stats.activeDays
+            if avgDaily.source == .remote { averageDailySource = .remote; anyRemoteSuccess = true }
         }
         if let tr = try? await trTask {
             qualityTrendData = tr.data
@@ -383,27 +432,38 @@ final class StatisticsViewModel: ObservableObject {
     private func loadOfflineFromCache() async {
         // Ensure no shimmers while offline
         isLoadingOverview = false
+        isLoadingAverageDaily = false
         isLoadingTrends = false
         isLoadingHourly = false
         isLoadingDistribution = false
         isLoadingWeekly = false
         isLoadingInsights = false
 
-        let overviewRange = loadPeriodRange(.allTime, customStart: Date.distantPast, customEnd: Date())
+        let overviewRange = loadPeriodRange(.week, customStart: Date(), customEnd: Date())
+        let averageDailyRange = loadPeriodRange(averageDailyPeriod, customStart: averageDailyCustomStartDate, customEnd: averageDailyCustomEndDate)
         let trendsRange = loadPeriodRange(qualityTrendsPeriod, customStart: qualityTrendsCustomStartDate, customEnd: qualityTrendsCustomEndDate)
         let hourlyRange = loadPeriodRange(dailyPatternsPeriod, customStart: dailyPatternsCustomStartDate, customEnd: dailyPatternsCustomEndDate)
         let distRange = loadPeriodRange(qualityDistributionPeriod, customStart: qualityDistributionCustomStartDate, customEnd: qualityDistributionCustomEndDate)
 
-        // Overview
+        // Overview - for totalEvents, thisWeekEvents, healthScore, activeDays (uses week period)
         if let ov = try? await analyticsRepository.fetchOverview(range: overviewRange) {
             totalEvents = ov.data.stats.totalEvents
             thisWeekEvents = ov.data.stats.thisWeekEvents
-            averageDaily = ov.data.stats.averageDaily
             healthScore = ov.data.stats.healthScore
+            activeDays = ov.data.stats.activeDays
             healthScoreInterpretationServer = ov.data.interpretationLabel
             overviewSource = ov.source
         } else {
             overviewSource = .cache
+        }
+
+        // Average Daily - separate call with user-selectable period
+        if let avgDaily = try? await analyticsRepository.fetchOverview(range: averageDailyRange) {
+            averageDaily = avgDaily.data.stats.averageDaily
+            averageDailyActiveDays = avgDaily.data.stats.activeDays
+            averageDailySource = avgDaily.source
+        } else {
+            averageDailySource = .cache
         }
 
         // Trends
@@ -438,8 +498,8 @@ final class StatisticsViewModel: ObservableObject {
             weeklySource = .cache
         }
 
-        // Insights
-        if let ins = try? await analyticsRepository.fetchInsights(range: trendsRange) {
+        // Insights - use fixed week range to match health score period
+        if let ins = try? await analyticsRepository.fetchInsights(range: overviewRange) {
             healthInsights = ins.data
             insightsSource = ins.source
         } else {
@@ -475,6 +535,16 @@ final class StatisticsViewModel: ObservableObject {
                 guard let self else { return }
                 // Repo already handles cache fallback; ViewModel never performs local calculations.
                 Task { await self.fetchRemoteDistribution() }
+            }
+            .store(in: &cancellables)
+
+        $averageDailyPeriod
+            .removeDuplicates()
+            .debounce(for: .milliseconds(350), scheduler: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self else { return }
+                // Repo already handles cache fallback; ViewModel never performs local calculations.
+                Task { await self.fetchRemoteAverageDaily() }
             }
             .store(in: &cancellables)
     }
@@ -521,14 +591,26 @@ final class StatisticsViewModel: ObservableObject {
     
     private func fetchRemoteInsights() async {
         isLoadingInsights = true
-        let range = loadPeriodRange(qualityTrendsPeriod, customStart: qualityTrendsCustomStartDate, customEnd: qualityTrendsCustomEndDate)
+        // Use fixed week range for insights to match health score period
+        let range = loadPeriodRange(.week, customStart: Date(), customEnd: Date())
         if let result = try? await analyticsRepository.fetchInsights(range: range) {
             self.healthInsights = result.data
             self.insightsSource = result.source
         }
         isLoadingInsights = false
     }
-    
+
+    private func fetchRemoteAverageDaily() async {
+        isLoadingAverageDaily = true
+        let range = loadPeriodRange(averageDailyPeriod, customStart: averageDailyCustomStartDate, customEnd: averageDailyCustomEndDate)
+        if let result = try? await analyticsRepository.fetchOverview(range: range) {
+            self.averageDaily = result.data.stats.averageDaily
+            self.averageDailyActiveDays = result.data.stats.activeDays
+            self.averageDailySource = result.source
+        }
+        isLoadingAverageDaily = false
+    }
+
     func updateQualityTrendsCustomDateRange(startDate: Date, endDate: Date) {
         qualityTrendsCustomStartDate = startDate
         qualityTrendsCustomEndDate = endDate
@@ -561,6 +643,18 @@ final class StatisticsViewModel: ObservableObject {
                 Task { await fetchRemoteDistribution() }
             } else {
                 Task { await fetchRemoteDistribution() } // Repo handles cache fallback
+            }
+        }
+    }
+
+    func updateAverageDailyCustomDateRange(startDate: Date, endDate: Date) {
+        averageDailyCustomStartDate = startDate
+        averageDailyCustomEndDate = endDate
+        if averageDailyPeriod == .custom {
+            if networkMonitor.isOnline {
+                Task { await fetchRemoteAverageDaily() }
+            } else {
+                Task { await fetchRemoteAverageDaily() } // Repo handles cache fallback
             }
         }
     }

@@ -14,6 +14,7 @@ struct BasicStatistics: Sendable {
     let thisWeekEvents: Int
     let averageDaily: Double
     let healthScore: Double
+    let activeDays: Int  // Number of unique days with events in the period
 }
 
 // MARK: - Trends

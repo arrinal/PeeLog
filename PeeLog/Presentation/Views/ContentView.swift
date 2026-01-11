@@ -65,9 +65,13 @@ struct ContentView: View {
             PaywallView(viewModel: container.makeSubscriptionViewModel(modelContext: modelContext))
         }
         .task {
-            await checkAuthenticationState()
+            // IMPORTANT: Set up observer FIRST so we catch any auth state changes
+            // from AuthRepositoryImpl.init() (which runs when we create the repo)
             setupAuthStateObserver()
             setupConnectivityObserver()
+
+            // Only run our check if observer hasn't already resolved the state
+            await checkAuthenticationState()
             NotificationCenter.default.addObserver(forName: .requestInitialFullSync, object: nil, queue: .main) { _ in
                 Task { @MainActor in
                     let sync = container.makeSyncCoordinator(modelContext: modelContext)
@@ -138,51 +142,82 @@ struct ContentView: View {
     
     private func setupAuthStateObserver() {
         let authRepository = container.makeAuthRepository(modelContext: modelContext)
-        
+
         authRepository.authState
             .receive(on: DispatchQueue.main)
             .sink { state in
-                switch state {
-                case .authenticated(let user):
-                    withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                        authState = .authenticated(user)
-                    }
-                    if lastSyncedUserId != user.id {
-                        lastSyncedUserId = user.id
-                        Task { @MainActor in
-                            let sync = container.makeSyncCoordinator(modelContext: modelContext)
-                            try? await sync.initialFullSync()
-                        }
-                    }
-                case .unauthenticated:
-                    withAnimation(.easeInOut(duration: 0.4)) {
-                        authState = .unauthenticated
-                    }
-                case .error:
-                    // IMPORTANT: Do not kick the user to login for transient/offline auth errors.
-                    if case .authenticated = authState, !networkMonitor.isOnline {
-                        return
-                    }
-                    withAnimation(.easeInOut(duration: 0.4)) { authState = .unauthenticated }
-                case .authenticating:
-                    break
-                }
+                handleAuthStateChange(state)
             }
             .store(in: &cancellables)
     }
+
+    private func handleAuthStateChange(_ state: AuthState) {
+        switch state {
+        case .authenticated(let user):
+            // Skip if already authenticated with the same user
+            if case .authenticated(let existingUser) = authState, existingUser.id == user.id {
+                return
+            }
+            // Transition from any state to authenticated
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                authState = .authenticated(user)
+            }
+            if lastSyncedUserId != user.id {
+                lastSyncedUserId = user.id
+                Task { @MainActor in
+                    let sync = container.makeSyncCoordinator(modelContext: modelContext)
+                    try? await sync.initialFullSync()
+                }
+            }
+        case .unauthenticated:
+            // IMPORTANT: Only transition to unauthenticated if we were previously authenticated.
+            // This is the sign-out case. Never go checking → unauthenticated directly.
+            // The checkAuthenticationState() function handles the initial state transition.
+            guard case .authenticated = authState else {
+                return
+            }
+            withAnimation(.easeInOut(duration: 0.4)) {
+                authState = .unauthenticated
+            }
+        case .error:
+            // IMPORTANT: Do not kick the user to login for transient/offline auth errors.
+            if case .authenticated = authState, !networkMonitor.isOnline {
+                return
+            }
+            // Only handle errors if we're authenticated (to transition to unauthenticated)
+            guard case .authenticated = authState else {
+                return
+            }
+            withAnimation(.easeInOut(duration: 0.4)) { authState = .unauthenticated }
+        case .authenticating:
+            break
+        }
+    }
     
     private func checkAuthenticationState() async {
+        // If observer already set authenticated state, skip redundant check
+        if case .authenticated = authState {
+            return
+        }
+
         do {
             let authRepository = container.makeAuthRepository(modelContext: modelContext)
             let userRepository = container.makeUserRepository(modelContext: modelContext)
-            
+
             // First check Firebase auth state
             let isFirebaseAuthenticated = await authRepository.isUserAuthenticated()
-            
+
+            // Check again - observer might have resolved auth while we were awaiting
+            if case .authenticated = authState {
+                return
+            }
+
             if isFirebaseAuthenticated {
                 // User is authenticated in Firebase, check for local user
                 if let user = await userRepository.getCurrentUser() {
                     await MainActor.run {
+                        // Final check before updating
+                        guard case .checking = authState else { return }
                         withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
                             authState = .authenticated(user)
                         }
@@ -192,12 +227,16 @@ struct ContentView: View {
                 // Prefer last known local authenticated user if present (e.g., offline reuse)
                 if let user = await userRepository.getCurrentUser() {
                     await MainActor.run {
+                        // Final check before updating
+                        guard case .checking = authState else { return }
                         withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
                             authState = .authenticated(user)
                         }
                     }
                 } else {
                     await MainActor.run {
+                        // Only set unauthenticated if still in checking state
+                        guard case .checking = authState else { return }
                         withAnimation(.easeInOut(duration: 0.4)) {
                             authState = .unauthenticated
                         }
@@ -206,6 +245,8 @@ struct ContentView: View {
             }
         } catch {
             await MainActor.run {
+                // Only set unauthenticated if still in checking state
+                guard case .checking = authState else { return }
                 withAnimation(.easeInOut(duration: 0.4)) {
                     authState = .unauthenticated
                 }
