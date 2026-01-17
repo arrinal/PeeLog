@@ -181,13 +181,18 @@ struct ContentView: View {
             }
         case .error:
             // IMPORTANT: Do not kick the user to login for transient/offline auth errors.
-            if case .authenticated = authState, !networkMonitor.isOnline {
-                return
-            }
-            // Only handle errors if we're authenticated (to transition to unauthenticated)
+            // Check both network status AND ensure we're currently authenticated before kicking out.
+            // The networkMonitor.isOnline check may have race conditions, so we're extra cautious.
             guard case .authenticated = authState else {
                 return
             }
+            // If offline, never kick to login - user should stay authenticated with local data
+            if !networkMonitor.isOnline {
+                return
+            }
+            // Even if online, only kick to login for critical auth errors (handled by AuthRepository)
+            // For most errors, the user should remain logged in with local data
+            // The AuthRepository's updateAuthState already filters out network errors
             withAnimation(.easeInOut(duration: 0.4)) { authState = .unauthenticated }
         case .authenticating:
             break
@@ -200,10 +205,14 @@ struct ContentView: View {
             return
         }
 
-        do {
-            let authRepository = container.makeAuthRepository(modelContext: modelContext)
-            let userRepository = container.makeUserRepository(modelContext: modelContext)
+        let authRepository = container.makeAuthRepository(modelContext: modelContext)
+        let userRepository = container.makeUserRepository(modelContext: modelContext)
 
+        // IMPORTANT: Always try to get local user first as a fallback
+        // This handles offline scenarios and network errors gracefully
+        let localUser = await userRepository.getCurrentUser()
+
+        do {
             // First check Firebase auth state
             let isFirebaseAuthenticated = await authRepository.isUserAuthenticated()
 
@@ -214,7 +223,7 @@ struct ContentView: View {
 
             if isFirebaseAuthenticated {
                 // User is authenticated in Firebase, check for local user
-                if let user = await userRepository.getCurrentUser() {
+                if let user = localUser {
                     await MainActor.run {
                         // Final check before updating
                         guard case .checking = authState else { return }
@@ -225,7 +234,7 @@ struct ContentView: View {
                 }
             } else {
                 // Prefer last known local authenticated user if present (e.g., offline reuse)
-                if let user = await userRepository.getCurrentUser() {
+                if let user = localUser {
                     await MainActor.run {
                         // Final check before updating
                         guard case .checking = authState else { return }
@@ -235,7 +244,7 @@ struct ContentView: View {
                     }
                 } else {
                     await MainActor.run {
-                        // Only set unauthenticated if still in checking state
+                        // Only set unauthenticated if still in checking state AND no local user exists
                         guard case .checking = authState else { return }
                         withAnimation(.easeInOut(duration: 0.4)) {
                             authState = .unauthenticated
@@ -244,11 +253,23 @@ struct ContentView: View {
                 }
             }
         } catch {
-            await MainActor.run {
-                // Only set unauthenticated if still in checking state
-                guard case .checking = authState else { return }
-                withAnimation(.easeInOut(duration: 0.4)) {
-                    authState = .unauthenticated
+            // IMPORTANT: On any error (network, Firebase, etc.), if we have a local user,
+            // authenticate with that user instead of showing login screen.
+            // Only show login screen if there's truly no user data at all.
+            if let user = localUser {
+                await MainActor.run {
+                    guard case .checking = authState else { return }
+                    withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                        authState = .authenticated(user)
+                    }
+                }
+            } else {
+                await MainActor.run {
+                    // Only set unauthenticated if still in checking state AND no local user
+                    guard case .checking = authState else { return }
+                    withAnimation(.easeInOut(duration: 0.4)) {
+                        authState = .unauthenticated
+                    }
                 }
             }
         }

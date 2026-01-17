@@ -16,6 +16,10 @@ struct StatisticsView: View {
     @StateObject private var viewModel: StatisticsViewModel
     @State private var isAskAISheetPresented: Bool = false
 
+    // Interactive chart states
+    @State private var selectedQualityTrendPoint: QualityTrendPoint?
+    @State private var selectedHourlyPoint: HourlyData?
+
     init(viewModel: StatisticsViewModel) {
         _viewModel = StateObject(wrappedValue: viewModel)
     }
@@ -339,60 +343,119 @@ struct StatisticsView: View {
                 let dataCount = viewModel.qualityTrendData.count
                 let showPoints = dataCount <= 15
 
-                Chart(viewModel.qualityTrendData) { dataPoint in
-                    LineMark(
-                        x: .value("Date", dataPoint.date),
-                        y: .value("Quality", dataPoint.averageQuality)
-                    )
-                    .foregroundStyle(.blue)
-                    .lineStyle(StrokeStyle(lineWidth: 2))
-
-                    if showPoints {
-                        PointMark(
-                            x: .value("Date", dataPoint.date),
-                            y: .value("Quality", dataPoint.averageQuality)
-                        )
-                        .foregroundStyle(.blue)
-                        .symbolSize(40)
+                VStack(spacing: 8) {
+                    if let selected = selectedQualityTrendPoint {
+                        qualityTrendTooltip(for: selected)
+                            .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                            .padding(.bottom, 4)
                     }
-                }
-                .frame(height: 200)
-                .chartYScale(domain: 0...6)
-                .chartXAxis {
-                    AxisMarks(values: .automatic(desiredCount: min(dataCount, 5))) { value in
-                        AxisGridLine()
-                        AxisTick()
-                        AxisValueLabel {
-                            if let date = value.as(Date.self) {
-                                Text(formatDateForAxis(date, dataCount: dataCount))
-                                    .font(.system(size: 9))
+
+                    // Chart
+                    Chart {
+                        ForEach(viewModel.qualityTrendData) { dataPoint in
+                            LineMark(
+                                x: .value("Date", dataPoint.date),
+                                y: .value("Quality", dataPoint.averageQuality)
+                            )
+                            .foregroundStyle(.blue)
+                            .lineStyle(StrokeStyle(lineWidth: 2))
+
+                            if showPoints {
+                                PointMark(
+                                    x: .value("Date", dataPoint.date),
+                                    y: .value("Quality", dataPoint.averageQuality)
+                                )
+                                .foregroundStyle(.blue)
+                                .symbolSize(40)
+                            }
+                        }
+
+                        // Selection indicator
+                        if let selected = selectedQualityTrendPoint {
+                            RuleMark(x: .value("Date", selected.date))
+                                .foregroundStyle(.blue.opacity(0.3))
+                                .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 3]))
+
+                            PointMark(
+                                x: .value("Date", selected.date),
+                                y: .value("Quality", selected.averageQuality)
+                            )
+                            .foregroundStyle(.white)
+                            .symbolSize(100)
+
+                            PointMark(
+                                x: .value("Date", selected.date),
+                                y: .value("Quality", selected.averageQuality)
+                            )
+                            .foregroundStyle(.blue)
+                            .symbolSize(60)
+                        }
+                    }
+                    .frame(height: 180)
+                    .chartYScale(domain: 0...6)
+                    .chartXAxis {
+                        AxisMarks(values: .automatic(desiredCount: min(dataCount, 5))) { value in
+                            AxisGridLine()
+                            AxisTick()
+                            AxisValueLabel {
+                                if let date = value.as(Date.self) {
+                                    Text(formatDateForAxis(date, dataCount: dataCount))
+                                        .font(.system(size: 9))
+                                }
                             }
                         }
                     }
-                }
-                .chartYAxis {
-                    AxisMarks(position: .trailing, values: [1, 2, 3, 4, 5]) { value in
-                        AxisGridLine()
-                        AxisTick()
-                        AxisValueLabel {
-                            if let v = value.as(Int.self) {
-                                Text(qualityScoreLabel(for: v))
-                                    .font(.system(size: 9))
+                    .chartYAxis {
+                        AxisMarks(position: .trailing, values: [1, 2, 3, 4, 5]) { value in
+                            AxisGridLine()
+                            AxisTick()
+                            AxisValueLabel {
+                                if let v = value.as(Int.self) {
+                                    Text(qualityScoreLabel(for: v))
+                                        .font(.system(size: 9))
+                                }
                             }
                         }
                     }
-                }
+                    .chartOverlay { proxy in
+                        GeometryReader { geometry in
+                            Rectangle()
+                                .fill(Color.clear)
+                                .contentShape(Rectangle())
+                                .gesture(
+                                    DragGesture(minimumDistance: 0)
+                                        .onChanged { value in
+                                            let location = value.location
+                                            if let date: Date = proxy.value(atX: location.x) {
+                                                // Find closest data point
+                                                let closest = viewModel.qualityTrendData.min(by: {
+                                                    abs($0.date.timeIntervalSince(date)) < abs($1.date.timeIntervalSince(date))
+                                                })
+                                                withAnimation(.easeInOut(duration: 0.1)) {
+                                                    selectedQualityTrendPoint = closest
+                                                }
+                                            }
+                                        }
+                                        .onEnded { _ in
+                                            withAnimation(.easeOut(duration: 0.2)) {
+                                                selectedQualityTrendPoint = nil
+                                            }
+                                        }
+                                )
+                        }
+                    }
 
-                // Chart legend
-                HStack(spacing: 4) {
-                    Image(systemName: "arrow.up")
-                        .font(.caption2)
-                        .foregroundColor(.green)
-                    Text("Higher = Better (5 = Pale Yellow, 1 = Amber)")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
+                    // Chart legend
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.up")
+                            .font(.caption2)
+                            .foregroundColor(.green)
+                        Text("Higher = Better (5 = Pale Yellow, 1 = Amber)")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
             } else {
                 EmptyChartView(message: "No quality data available")
             }
@@ -420,6 +483,60 @@ struct StatisticsView: View {
         // Consistent format across all time ranges: "MMM d" (e.g., "Jan 3")
         formatter.dateFormat = "MMM d"
         return formatter.string(from: date)
+    }
+
+    private func qualityTrendTooltip(for point: QualityTrendPoint) -> some View {
+        let dateString = formatTooltipDate(point.date)
+        let qualityName = qualityScoreLabel(for: Int(point.averageQuality.rounded()))
+
+        return VStack(spacing: 4) {
+            Text(dateString)
+                .font(.caption2)
+                .foregroundColor(.secondary)
+            Text(qualityName)
+                .font(.caption)
+                .fontWeight(.semibold)
+                .foregroundColor(.blue)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color(.systemBackground))
+                .shadow(color: .black.opacity(0.15), radius: 4, x: 0, y: 2)
+        )
+    }
+
+    private func formatTooltipDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d, yyyy"
+        return formatter.string(from: date)
+    }
+
+    private func hourlyTooltip(for point: HourlyData) -> some View {
+        return VStack(spacing: 4) {
+            Text(formatHourFull(point.hour))
+                .font(.caption2)
+                .foregroundColor(.secondary)
+            Text("\(point.count) times")
+                .font(.caption)
+                .fontWeight(.semibold)
+                .foregroundColor(.green)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color(.systemBackground))
+                .shadow(color: .black.opacity(0.15), radius: 4, x: 0, y: 2)
+        )
+    }
+
+    private func formatHourFull(_ hour: Int) -> String {
+        if hour == 0 { return "12:00 AM" }
+        if hour == 12 { return "12:00 PM" }
+        if hour < 12 { return "\(hour):00 AM" }
+        return "\(hour - 12):00 PM"
     }
 
     private var dailyPatternsSection: some View {
@@ -459,13 +576,25 @@ struct StatisticsView: View {
                     .frame(height: 150)
                     .shimmering()
             } else if !viewModel.hourlyData.isEmpty {
-                Chart(viewModel.hourlyData) { dataPoint in
-                    BarMark(
-                        x: .value("Hour", dataPoint.hour),
-                        y: .value("Count", dataPoint.count)
-                    )
-                    .foregroundStyle(.green)
-                    .cornerRadius(4)
+                Chart {
+                    ForEach(viewModel.hourlyData) { dataPoint in
+                        BarMark(
+                            x: .value("Hour", dataPoint.hour),
+                            y: .value("Count", dataPoint.count)
+                        )
+                        .foregroundStyle(selectedHourlyPoint?.hour == dataPoint.hour ? .green : .green.opacity(0.7))
+                        .cornerRadius(4)
+                    }
+
+                    // Selection indicator
+                    if let selected = selectedHourlyPoint {
+                        RuleMark(x: .value("Hour", selected.hour))
+                            .foregroundStyle(.green.opacity(0.3))
+                            .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 3]))
+                            .annotation(position: .top, spacing: 0, overflowResolution: .init(x: .fit(to: .chart), y: .fit(to: .chart))) {
+                                hourlyTooltip(for: selected)
+                            }
+                    }
                 }
                 .frame(height: 150)
                 .chartXScale(domain: 0...23)
@@ -486,6 +615,31 @@ struct StatisticsView: View {
                         AxisGridLine()
                         AxisTick()
                         AxisValueLabel()
+                    }
+                }
+                .chartOverlay { proxy in
+                    GeometryReader { geometry in
+                        Rectangle()
+                            .fill(Color.clear)
+                            .contentShape(Rectangle())
+                            .gesture(
+                                DragGesture(minimumDistance: 0)
+                                    .onChanged { value in
+                                        let location = value.location
+                                        if let hour: Int = proxy.value(atX: location.x) {
+                                            // Find the data point for this hour
+                                            let hourData = viewModel.hourlyData.first(where: { $0.hour == hour })
+                                            withAnimation(.easeInOut(duration: 0.1)) {
+                                                selectedHourlyPoint = hourData
+                                            }
+                                        }
+                                    }
+                                    .onEnded { _ in
+                                        withAnimation(.easeOut(duration: 0.2)) {
+                                            selectedHourlyPoint = nil
+                                        }
+                                    }
+                            )
                     }
                 }
             } else {

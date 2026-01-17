@@ -197,10 +197,18 @@ final class AuthRepositoryImpl: AuthRepository {
                 updateAuthState(.authenticated(user))
             }
         } catch {
-            updateAuthState(.error(.unknown(error.localizedDescription)))
+            // IMPORTANT: Don't emit error state for network errors if we have a local user.
+            // This prevents showing login screen when offline.
+            if let localUser = await getMostRecentLocalUser() {
+                // Keep user authenticated with local data
+                currentUserSubject.send(localUser)
+                updateAuthState(.authenticated(localUser))
+            } else {
+                updateAuthState(.error(.unknown(error.localizedDescription)))
+            }
         }
     }
-    
+
     private func handleFirebaseSignOut() async {
         // If the user explicitly signed out, always honor it.
         if isSigningOut {
