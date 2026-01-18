@@ -17,6 +17,11 @@ final class SubscriptionService {
         }
     }
 
+    struct EntitlementInfo {
+        let originalTransactionId: String
+        let productId: String
+    }
+
     private let config: Config
     private var cachedProduct: Product?
 
@@ -50,6 +55,22 @@ final class SubscriptionService {
             }
         }
         return false
+    }
+
+    func activeEntitlementInfo() async -> EntitlementInfo? {
+        for await result in Transaction.currentEntitlements {
+            if case .verified(let transaction) = result {
+                if transaction.productID == config.monthlyProductId {
+                    if transaction.revocationDate == nil && transaction.expirationDate.map({ $0 > Date() }) ?? true {
+                        return EntitlementInfo(
+                            originalTransactionId: String(transaction.originalID),
+                            productId: transaction.productID
+                        )
+                    }
+                }
+            }
+        }
+        return nil
     }
 
     // MARK: - Purchase

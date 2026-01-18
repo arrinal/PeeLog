@@ -7,14 +7,21 @@
 
 import Foundation
 
+enum EntitlementStatus: Equatable {
+    case entitled
+    case notEntitled
+}
+
+enum PurchaseResult: Equatable {
+    case success
+    case failed
+}
+
 @MainActor
 protocol SubscriptionRepository: AnyObject {
-    func isEntitled(userId: UUID) async -> Bool
-    func startTrialIfEligible(userId: UUID)
-    func isTrialActive(userId: UUID) -> Bool
-    func purchase() async -> Bool
-    func restore() async -> Bool
-    func daysRemainingInTrial(userId: UUID) -> Int
+    func currentEntitlementStatus(userId: UUID) async -> EntitlementStatus
+    func purchaseAndClaim(userId: UUID) async -> PurchaseResult
+    func restoreAndClaim(userId: UUID) async -> PurchaseResult
 }
 
 

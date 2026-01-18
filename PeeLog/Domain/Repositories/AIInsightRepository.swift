@@ -35,9 +35,9 @@ enum AIInsightRepositoryError: Error, LocalizedError, Sendable {
     var errorDescription: String? {
         switch self {
         case .notAuthenticated:
-            return "User is not authenticated. Please sign in to use AI insights."
+            return "User is not authenticated. Please sign in to use PeeLog AI insights."
         case .rateLimitExceeded:
-            return "You've reached your daily AI question limit. Try again tomorrow."
+            return "You've reached your daily PeeLog AI question limit. Try again tomorrow."
         case .invalidResponse:
             return "Received an invalid response. Please try again."
         case .backend(let message):

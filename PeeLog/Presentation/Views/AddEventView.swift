@@ -300,7 +300,7 @@ struct AddEventViewContent: View {
         VStack(spacing: 16) {
             HStack(spacing: 12) {
                 Image(systemName: "mappin.circle.fill")
-                    .foregroundColor(.red)
+                    .foregroundColor(.teal)
                 VStack(alignment: .leading, spacing: 4) {
                     if let name = locationInfo.name {
                         Text(name)
@@ -359,7 +359,7 @@ struct AddEventViewContent: View {
                     span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
                 ))) {
                     Marker("Current Location", coordinate: locationInfo.data.coordinate)
-                        .tint(.blue)
+                        .tint(.teal)
                 }
                 .disabled(true)
                 .frame(height: 140)
@@ -383,7 +383,7 @@ struct AddEventViewContent: View {
                     span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
                 ))) {
                     Marker("Current Location", coordinate: locationInfo.data.coordinate)
-                        .tint(.blue)
+                        .tint(.teal)
                 }
                 .navigationTitle("Event Location")
                 .navigationBarTitleDisplayMode(.inline)

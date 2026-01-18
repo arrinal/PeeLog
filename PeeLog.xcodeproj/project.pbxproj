@@ -7,10 +7,12 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		701E50AE2F1D1ABF00A4F241 /* Lottie in Frameworks */ = {isa = PBXBuildFile; productRef = 701E50AD2F1D1ABF00A4F241 /* Lottie */; };
 		705210B42E9645B8003CC707 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 705210B32E9645B8003CC707 /* WidgetKit.framework */; };
 		705210B62E9645B8003CC707 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 705210B52E9645B8003CC707 /* SwiftUI.framework */; };
 		705210C72E9645BA003CC707 /* PeeLogWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 705210B22E9645B8003CC707 /* PeeLogWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		70A2EA942E472D83002D4947 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 70A2EA932E472D83002D4947 /* FirebaseFirestore */; };
+		70C1D20F2F1CB00800F21C94 /* PeeLogStoreKit.storekit in Resources */ = {isa = PBXBuildFile; fileRef = 70C1D20E2F1CB00800F21C94 /* PeeLogStoreKit.storekit */; };
 		70C2FFA32E2CE06200878AED /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = 70C2FFA22E2CE06200878AED /* FirebaseAnalytics */; };
 		70C2FFA52E2CE06200878AED /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 70C2FFA42E2CE06200878AED /* FirebaseAuth */; };
 		70D2AA132F1A2B3C4D5E6F70 /* FirebaseFunctions in Frameworks */ = {isa = PBXBuildFile; productRef = 70D2AA112F1A2B3C4D5E6F70 /* FirebaseFunctions */; };
@@ -62,6 +64,7 @@
 		709FDFAF2DCA6AD900185FE3 /* PeeLog.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PeeLog.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		709FDFBE2DCA6ADC00185FE3 /* PeeLogTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PeeLogTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		709FDFC82DCA6ADC00185FE3 /* PeeLogUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PeeLogUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		70C1D20E2F1CB00800F21C94 /* PeeLogStoreKit.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; path = PeeLogStoreKit.storekit; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -135,6 +138,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				701E50AE2F1D1ABF00A4F241 /* Lottie in Frameworks */,
 				70C2FFA32E2CE06200878AED /* FirebaseAnalytics in Frameworks */,
 				70C2FFA52E2CE06200878AED /* FirebaseAuth in Frameworks */,
 				70A2EA942E472D83002D4947 /* FirebaseFirestore in Frameworks */,
@@ -162,6 +166,7 @@
 		709FDFA62DCA6AD900185FE3 = {
 			isa = PBXGroup;
 			children = (
+				70C1D20E2F1CB00800F21C94 /* PeeLogStoreKit.storekit */,
 				705210D22E964BD9003CC707 /* PeeLogWidgetExtension.entitlements */,
 				709FDFB12DCA6AD900185FE3 /* PeeLog */,
 				709FDFC12DCA6ADC00185FE3 /* PeeLogTests */,
@@ -240,6 +245,7 @@
 				70C2FFA42E2CE06200878AED /* FirebaseAuth */,
 				70A2EA932E472D83002D4947 /* FirebaseFirestore */,
 				70D2AA112F1A2B3C4D5E6F70 /* FirebaseFunctions */,
+				701E50AD2F1D1ABF00A4F241 /* Lottie */,
 			);
 			productName = PeeLog;
 			productReference = 709FDFAF2DCA6AD900185FE3 /* PeeLog.app */;
@@ -328,6 +334,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				70C2FFA12E2CE04500878AED /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+				701E50AC2F1D1ABF00A4F241 /* XCRemoteSwiftPackageReference "lottie-ios" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 709FDFB02DCA6AD900185FE3 /* Products */;
@@ -354,6 +361,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				70C1D20F2F1CB00800F21C94 /* PeeLogStoreKit.storekit in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -811,6 +819,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		701E50AC2F1D1ABF00A4F241 /* XCRemoteSwiftPackageReference "lottie-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/airbnb/lottie-ios.git";
+			requirement = {
+				kind = exactVersion;
+				version = 4.6.0;
+			};
+		};
 		70C2FFA12E2CE04500878AED /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
@@ -822,6 +838,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		701E50AD2F1D1ABF00A4F241 /* Lottie */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 701E50AC2F1D1ABF00A4F241 /* XCRemoteSwiftPackageReference "lottie-ios" */;
+			productName = Lottie;
+		};
 		70A2EA932E472D83002D4947 /* FirebaseFirestore */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 70C2FFA12E2CE04500878AED /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;

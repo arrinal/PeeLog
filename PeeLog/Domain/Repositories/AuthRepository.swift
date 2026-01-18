@@ -108,23 +108,9 @@ protocol AuthRepository: AnyObject {
     var isLoading: AnyPublisher<Bool, Never> { get }
     
     // Authentication methods
-    func signInWithEmail(_ email: String, password: String) async throws -> AuthResult
-    func registerWithEmail(_ email: String, password: String, displayName: String?) async throws -> AuthResult
     func signInWithApple() async throws -> AuthResult
     func signOut() async throws
     func deleteAccount() async throws
-    
-    // Password reset
-    func sendPasswordReset(toEmail email: String) async throws
-    
-    // Email verification
-    func sendEmailVerification() async throws
-    func sendEmailVerification(to user: User) async throws
-    func sendEmailVerification(toEmail email: String, password: String) async throws
-    func isEmailVerified() -> Bool
-    func checkEmailVerificationStatus() async throws -> Bool
-    func checkEmailVerificationStatus(email: String, password: String) async throws -> Bool
-    func reloadUser() async throws
     
     // Token management
     func refreshToken() async throws -> String
@@ -136,7 +122,5 @@ protocol AuthRepository: AnyObject {
     func updateAuthState(_ state: AuthState)
     func isUserAuthenticated() async -> Bool
     
-    // Utility methods
-    func isEmailValid(_ email: String) -> Bool
-    func isPasswordValid(_ password: String) -> Bool
+    func reloadUser() async throws
 } 

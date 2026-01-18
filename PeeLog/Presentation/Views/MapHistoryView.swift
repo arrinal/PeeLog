@@ -326,7 +326,7 @@ struct PeeEventPopup: View {
                             HStack {
                                 Image(systemName: "mappin.circle.fill")
                                     .font(.system(size: 14))
-                                    .foregroundColor(.red)
+                                    .foregroundColor(.teal)
                                 Text(locationName)
                                     .font(.system(size: 14, weight: .medium))
                                     .foregroundColor(.primary)

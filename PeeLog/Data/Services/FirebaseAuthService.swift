@@ -40,88 +40,6 @@ final class FirebaseAuthService: ObservableObject {
         isSignedIn = newSignedIn
     }
     
-    // MARK: - Email/Password Authentication
-    
-    func signInWithEmail(_ email: String, password: String) async throws -> FirebaseAuth.User {
-        do {
-            let authResult = try await Auth.auth().signIn(withEmail: email, password: password)
-            
-            // Check if email is verified
-            if !authResult.user.isEmailVerified {
-                // Sign out the user since they're not verified
-                try Auth.auth().signOut()
-                throw AuthError.emailNotVerified
-            }
-            
-            updateAuthState()
-            return authResult.user
-        } catch {
-            // If it's already an AuthError, don't map it
-            if let authError = error as? AuthError {
-                throw authError
-            }
-            throw mapFirebaseError(error)
-        }
-    }
-    
-    func createUserWithEmail(_ email: String, password: String) async throws -> FirebaseAuth.User {
-        do {
-            let authResult = try await Auth.auth().createUser(withEmail: email, password: password)
-            updateAuthState()
-            return authResult.user
-        } catch {
-            throw mapFirebaseError(error)
-        }
-    }
-    
-    // MARK: - Email Verification
-    
-    func sendEmailVerification() async throws {
-        guard let user = Auth.auth().currentUser else {
-            throw AuthError.userNotFound
-        }
-        
-        do {
-            try await user.sendEmailVerification()
-        } catch {
-            throw mapFirebaseError(error)
-        }
-    }
-    
-    func sendEmailVerification(toEmail email: String, password: String) async throws {
-        do {
-            // Temporarily sign in the user to send verification email
-            let authResult = try await Auth.auth().signIn(withEmail: email, password: password)
-            
-            // Send verification email
-            try await authResult.user.sendEmailVerification()
-            
-            // Sign out the user again since they're not verified yet
-            try Auth.auth().signOut()
-        } catch {
-            // If it's already an AuthError, don't map it
-            if let authError = error as? AuthError {
-                throw authError
-            }
-            throw mapFirebaseError(error)
-        }
-    }
-    
-    func sendEmailVerification(to user: FirebaseAuth.User) async throws {
-        do {
-            try await user.sendEmailVerification()
-        } catch {
-            throw mapFirebaseError(error)
-        }
-    }
-    
-    func isEmailVerified() -> Bool {
-        guard let user = Auth.auth().currentUser else {
-            return false
-        }
-        return user.isEmailVerified
-    }
-    
     func reloadUser() async throws {
         guard let user = Auth.auth().currentUser else {
             throw AuthError.userNotFound
@@ -130,51 +48,6 @@ final class FirebaseAuthService: ObservableObject {
         do {
             try await user.reload()
             updateAuthState()
-        } catch {
-            throw mapFirebaseError(error)
-        }
-    }
-    
-    func checkEmailVerificationStatus() async throws -> Bool {
-        guard let user = Auth.auth().currentUser else {
-            throw AuthError.userNotFound
-        }
-        
-        do {
-            try await user.reload()
-            updateAuthState()
-            return user.isEmailVerified
-        } catch {
-            throw mapFirebaseError(error)
-        }
-    }
-    
-    func checkEmailVerificationStatus(email: String, password: String) async throws -> Bool {
-        do {
-            // Temporarily sign in to check verification status
-            let authResult = try await Auth.auth().signIn(withEmail: email, password: password)
-            
-            // Reload user to get fresh verification status
-            try await authResult.user.reload()
-            
-            let isVerified = authResult.user.isEmailVerified
-            
-            // Sign out the user if not verified
-            if !isVerified {
-                try Auth.auth().signOut()
-            }
-            
-            return isVerified
-        } catch {
-            throw mapFirebaseError(error)
-        }
-    }
-
-    // MARK: - Password Reset
-    
-    func sendPasswordReset(toEmail email: String) async throws {
-        do {
-            try await Auth.auth().sendPasswordReset(withEmail: email)
         } catch {
             throw mapFirebaseError(error)
         }
@@ -378,19 +251,6 @@ final class FirebaseAuthService: ObservableObject {
             print("✅ Firebase Auth: Successfully updated display name to '\(displayName)'")
         } catch {
             print("❌ Firebase Auth: Failed to update display name to '\(displayName)': \(error)")
-            throw mapFirebaseError(error)
-        }
-    }
-    
-    func updateEmail(_ email: String) async throws {
-        guard let user = Auth.auth().currentUser else {
-            throw AuthError.userNotFound
-        }
-        
-        do {
-            // Use the newer email verification flow instead of direct update
-            try await user.sendEmailVerification(beforeUpdatingEmail: email)
-        } catch {
             throw mapFirebaseError(error)
         }
     }

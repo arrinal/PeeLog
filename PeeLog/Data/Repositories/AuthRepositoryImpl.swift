@@ -25,8 +25,6 @@ final class AuthRepositoryImpl: AuthRepository {
     // Flag to prevent Firebase auth observer interference during sign-out
     private var isSigningOut = false
     private var signOutCompletionTime: Date?
-    // Flag to suppress auth state promotion during registration flow
-    private var isRegisteringNewUser = false
     // Guard to avoid repeated reload() calls in the same session
     private var didRefreshUserThisSession = false
     
@@ -67,7 +65,7 @@ final class AuthRepositoryImpl: AuthRepository {
                     
                     if isSignedIn {
                         // Prevent handleFirebaseSignIn during sign-out or registration to avoid race conditions
-                        if !self.isSigningOut && !self.isRegisteringNewUser {
+                        if !self.isSigningOut {
                             await self.handleFirebaseSignIn()
                         }
                     } else {
@@ -250,94 +248,6 @@ final class AuthRepositoryImpl: AuthRepository {
     
     // MARK: - Authentication Methods
     
-    func signInWithEmail(_ email: String, password: String) async throws -> AuthResult {
-        isLoadingSubject.send(true)
-        defer { isLoadingSubject.send(false) }
-        
-        do {
-            let firebaseUser = try await firebaseAuthService.signInWithEmail(email, password: password)
-            
-            // Reload user to get fresh data including display name
-            try await firebaseAuthService.reloadUser()
-            
-            // Get updated user info after reload
-            let updatedFirebaseUser = firebaseAuthService.getCurrentUser() ?? firebaseUser
-            let accessToken = try await firebaseAuthService.getIDToken()
-            
-            // Get or create local user
-            let user: User
-            if let existingUser = await getUserByEmail(email) {
-                // Update display name if it's different from Firebase
-                if existingUser.displayName != updatedFirebaseUser.displayName {
-                    existingUser.displayName = updatedFirebaseUser.displayName
-                    try await updateUserLocally(existingUser)
-                }
-                user = existingUser
-            } else {
-                user = User.createEmailUser(
-                    email: email,
-                    displayName: updatedFirebaseUser.displayName
-                )
-                try await saveUserLocally(user)
-            }
-            
-            updateAuthState(.authenticated(user))
-            
-            return AuthResult(
-                user: user,
-                accessToken: accessToken
-            )
-            
-        } catch {
-            let authError = error as? AuthError ?? AuthError.unknown(error.localizedDescription)
-            updateAuthState(.error(authError))
-            throw authError
-        }
-    }
-    
-    func registerWithEmail(_ email: String, password: String, displayName: String?) async throws -> AuthResult {
-        isLoadingSubject.send(true)
-        defer { isLoadingSubject.send(false) }
-        
-        // Suppress auth state promotion while Firebase marks the session signed-in during registration
-        isRegisteringNewUser = true
-        defer { isRegisteringNewUser = false }
-        
-        do {
-            let firebaseUser = try await firebaseAuthService.createUserWithEmail(email, password: password)
-            
-            // Update Firebase profile if display name provided
-            if let displayName = displayName, !displayName.isEmpty {
-                try await firebaseAuthService.updateDisplayName(displayName)
-                // Reload user to ensure the display name is properly set
-                try await firebaseAuthService.reloadUser()
-            }
-            
-            // Send email verification
-            try await firebaseAuthService.sendEmailVerification(to: firebaseUser)
-            
-            // Sign out the user since they need to verify email first
-            try await firebaseAuthService.signOut()
-            
-            // Create local user (but don't authenticate them yet)
-            let user = User.createEmailUser(
-                email: email,
-                displayName: displayName
-            )
-            
-            // Don't save locally or update auth state since user is not verified yet
-            // Return empty token since user is not authenticated
-            return AuthResult(
-                user: user,
-                accessToken: ""
-            )
-            
-        } catch {
-            let authError = error as? AuthError ?? AuthError.unknown(error.localizedDescription)
-            updateAuthState(.error(authError))
-            throw authError
-        }
-    }
     
     func signInWithApple() async throws -> AuthResult {
         isLoadingSubject.send(true)
@@ -430,71 +340,6 @@ final class AuthRepositoryImpl: AuthRepository {
         }
     }
     
-    // MARK: - Password Reset
-    
-    func sendPasswordReset(toEmail email: String) async throws {
-        do {
-            // Validate email format
-            guard isEmailValid(email) else {
-                throw AuthError.invalidEmail
-            }
-            
-            // Send password reset email via Firebase
-            try await firebaseAuthService.sendPasswordReset(toEmail: email)
-            
-        } catch {
-            throw error as? AuthError ?? AuthError.unknown(error.localizedDescription)
-        }
-    }
-    
-    // MARK: - Email Verification
-    
-    func sendEmailVerification() async throws {
-        do {
-            try await firebaseAuthService.sendEmailVerification()
-        } catch {
-            throw error as? AuthError ?? AuthError.unknown(error.localizedDescription)
-        }
-    }
-    
-    func sendEmailVerification(to user: User) async throws {
-        do {
-            // For local User object, we need to use the current Firebase user
-            // Since we can't directly use our User object with Firebase methods
-            try await firebaseAuthService.sendEmailVerification()
-        } catch {
-            throw error as? AuthError ?? AuthError.unknown(error.localizedDescription)
-        }
-    }
-    
-    func sendEmailVerification(toEmail email: String, password: String) async throws {
-        do {
-            try await firebaseAuthService.sendEmailVerification(toEmail: email, password: password)
-        } catch {
-            throw error as? AuthError ?? AuthError.unknown(error.localizedDescription)
-        }
-    }
-    
-    func isEmailVerified() -> Bool {
-        return firebaseAuthService.isEmailVerified()
-    }
-    
-    func checkEmailVerificationStatus() async throws -> Bool {
-        do {
-            return try await firebaseAuthService.checkEmailVerificationStatus()
-        } catch {
-            throw error as? AuthError ?? AuthError.unknown(error.localizedDescription)
-        }
-    }
-    
-    func checkEmailVerificationStatus(email: String, password: String) async throws -> Bool {
-        do {
-            return try await firebaseAuthService.checkEmailVerificationStatus(email: email, password: password)
-        } catch {
-            throw error as? AuthError ?? AuthError.unknown(error.localizedDescription)
-        }
-    }
-    
     func reloadUser() async throws {
         do {
             try await firebaseAuthService.reloadUser()
@@ -541,16 +386,6 @@ final class AuthRepositoryImpl: AuthRepository {
         // treat the user as authenticated even when offline (token refresh may fail offline).
         guard currentUserSubject.value != nil else { return false }
         return firebaseAuthService.getCurrentUser() != nil
-    }
-    
-    // MARK: - Validation
-    
-    func isEmailValid(_ email: String) -> Bool {
-        return ValidationUtility.isEmailValid(email)
-    }
-    
-    func isPasswordValid(_ password: String) -> Bool {
-        return ValidationUtility.isPasswordValid(password)
     }
     
     // MARK: - Local Storage Helpers

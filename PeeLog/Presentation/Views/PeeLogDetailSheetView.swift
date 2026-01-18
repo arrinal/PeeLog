@@ -22,7 +22,7 @@ struct PeeLogDetailSheetView: View {
                         // Map view
                         Map(position: $mapCameraPosition) {
                             Marker(snapshot.locationName ?? "Pee Location", coordinate: coordinate)
-                                .tint(.red)
+                                .tint(.teal)
                         }
                         .transaction { tx in
                             tx.disablesAnimations = true
@@ -68,7 +68,7 @@ struct PeeLogDetailSheetView: View {
                             VStack(alignment: .leading, spacing: 8) {
                                 HStack {
                                     Image(systemName: "mappin.circle.fill")
-                                        .foregroundColor(.red)
+                                        .foregroundColor(.teal)
                                     Text("Location")
                                         .font(.headline)
                                 }

@@ -396,7 +396,7 @@ struct EventCard: View {
                                 HStack(spacing: 6) {
                                     Image(systemName: "mappin.circle.fill")
                                         .font(.system(size: 14))
-                                        .foregroundColor(.red)
+                                        .foregroundColor(.teal)
                                     Text(locationName)
                                         .font(.system(size: 13, weight: .medium))
                                         .foregroundColor(.blue)

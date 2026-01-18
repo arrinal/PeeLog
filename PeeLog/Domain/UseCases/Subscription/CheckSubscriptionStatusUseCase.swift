@@ -17,9 +17,9 @@ final class CheckSubscriptionStatusUseCase {
         self.userRepository = userRepository
     }
     
-    func execute() async -> Bool {
-        guard let user = await userRepository.getCurrentUser() else { return false }
-        return await repository.isEntitled(userId: user.id)
+    func execute() async -> EntitlementStatus {
+        guard let user = await userRepository.getCurrentUser() else { return .notEntitled }
+        return await repository.currentEntitlementStatus(userId: user.id)
     }
 }
 

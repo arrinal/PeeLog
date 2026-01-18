@@ -52,7 +52,7 @@ struct AIInsightsSection: View {
             Image(systemName: "sparkles")
                 .foregroundColor(.blue)
 
-            Text("AI Insights")
+            Text("PeeLog AI Insights")
                 .font(.title2)
                 .fontWeight(.bold)
 
@@ -84,7 +84,7 @@ struct AIInsightsSection: View {
     @ViewBuilder
     private var aiCards: some View {
         if dailyInsight == nil, weeklyInsight == nil, customInsight == nil {
-            Text("No AI insights yet. Check back tomorrow after you’ve logged some events.")
+            Text("No PeeLog AI insights yet. Check back tomorrow after you’ve logged some events.")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)

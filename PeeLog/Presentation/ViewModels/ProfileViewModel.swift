@@ -31,7 +31,6 @@ final class ProfileViewModel: ObservableObject {
     // MARK: - Profile Editing
     @Published var isEditingProfile = false
     @Published var editedDisplayName = ""
-    @Published var editedEmail = ""
     
     // MARK: - Preferences
     @Published var notificationsEnabled = true
@@ -158,7 +157,6 @@ final class ProfileViewModel: ObservableObject {
         guard let user = currentUser else { return }
         
         editedDisplayName = user.displayName ?? ""
-        editedEmail = user.email ?? ""
         isEditingProfile = true
     }
     
@@ -172,7 +170,7 @@ final class ProfileViewModel: ObservableObject {
             let updatedUser = try await createUserProfileUseCase.updateProfile(
                 user: user,
                 displayName: editedDisplayName.isEmpty ? nil : editedDisplayName,
-                email: editedEmail.isEmpty ? nil : editedEmail
+                email: nil
             )
             
             currentUser = updatedUser
@@ -187,7 +185,6 @@ final class ProfileViewModel: ObservableObject {
     func cancelProfileEditing() {
         isEditingProfile = false
         editedDisplayName = ""
-        editedEmail = ""
         clearErrors()
     }
     
@@ -498,11 +495,7 @@ final class ProfileViewModel: ObservableObject {
     // MARK: - Validation
     
     var isProfileFormValid: Bool {
-        !editedDisplayName.isEmpty || !editedEmail.isEmpty
-    }
-    
-    func validateEmail(_ email: String) -> Bool {
-        return authenticateUserUseCase.isEmailValid(email)
+        !editedDisplayName.isEmpty
     }
 } 
  

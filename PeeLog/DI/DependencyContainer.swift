@@ -192,15 +192,10 @@ class DependencyContainer: ObservableObject {
     func makeAuthenticationViewModel(modelContext: ModelContext) -> AuthenticationViewModel {
         let authRepository = getAuthRepository(modelContext: modelContext)
         let userRepository = getUserRepository(modelContext: modelContext)
-        let peeEventRepository = getPeeEventRepository(modelContext: modelContext)
         
         let authVM = AuthenticationViewModel(
             authenticateUserUseCase: AuthenticateUserUseCase(
                 authRepository: authRepository,
-                userRepository: userRepository,
-                errorHandlingUseCase: errorHandlingUseCase
-            ),
-            createUserProfileUseCase: CreateUserProfileUseCase(
                 userRepository: userRepository,
                 errorHandlingUseCase: errorHandlingUseCase
             ),
@@ -243,13 +238,19 @@ class DependencyContainer: ObservableObject {
     func makeSubscriptionViewModel(modelContext: ModelContext) -> SubscriptionViewModel {
         let subRepo = getSubscriptionRepository()
         let userRepo = getUserRepository(modelContext: modelContext)
+        let authRepo = getAuthRepository(modelContext: modelContext)
+        let authenticateUserUseCase = AuthenticateUserUseCase(
+            authRepository: authRepo,
+            userRepository: userRepo,
+            errorHandlingUseCase: errorHandlingUseCase
+        )
         return SubscriptionViewModel(
             checkStatus: CheckSubscriptionStatusUseCase(repository: subRepo, userRepository: userRepo),
-            startTrial: StartTrialUseCase(repository: subRepo, userRepository: userRepo),
             purchaseUseCase: PurchaseSubscriptionUseCase(repository: subRepo),
             restoreUseCase: RestorePurchasesUseCase(repository: subRepo),
-            userRepository: userRepo,
-            subscriptionRepository: subRepo
+            authenticateUserUseCase: authenticateUserUseCase,
+            authRepository: authRepo,
+            userRepository: userRepo
         )
     }
 }

@@ -9,19 +9,20 @@ import SwiftUI
 
 struct PaywallView: View {
     @StateObject private var viewModel: SubscriptionViewModel
-    @Environment(\.dismiss) private var dismiss
+    private let onEntitlementChanged: ((EntitlementStatus) -> Void)?
 
-    init(viewModel: SubscriptionViewModel) {
+    init(viewModel: SubscriptionViewModel, onEntitlementChanged: ((EntitlementStatus) -> Void)? = nil) {
         _viewModel = StateObject(wrappedValue: viewModel)
+        self.onEntitlementChanged = onEntitlementChanged
     }
 
     var body: some View {
         NavigationView {
             VStack(spacing: 24) {
                 Spacer()
-                Image(systemName: "crown.fill")
-                    .font(.system(size: 64))
-                    .foregroundColor(.yellow)
+                LottieView(animationName: "paywall_waterdrop", loopMode: .loop)
+                    .frame(height: 250)
+                    .padding(.horizontal)
 
                 Text("Unlock PeeLog Premium")
                     .font(.largeTitle).bold()
@@ -30,17 +31,13 @@ struct PaywallView: View {
 
                 VStack(spacing: 12) {
                     Label("Cloud backup and sync", systemImage: "icloud.fill")
-                    Label("Advanced analytics", systemImage: "chart.bar.fill")
+                    Label("Advanced PeeLog AI analytics", systemImage: "chart.bar.fill")
                     Label("Widget quick log", systemImage: "rectangle.3.group.bubble.fill")
                 }
                 .foregroundColor(.primary)
 
-                if #available(iOS 15.0, *) {
-                    AsyncLabel(daysRemaining: viewModel)
-                }
-
                 VStack(spacing: 12) {
-                    Button(action: { Task { await viewModel.purchase() } }) {
+                    Button(action: { Task { await viewModel.startPurchaseFlow() } }) {
                         Text("Subscribe $5/month")
                             .font(.headline)
                             .frame(maxWidth: .infinity, minHeight: 50)
@@ -50,42 +47,35 @@ struct PaywallView: View {
                     }
                     .disabled(viewModel.isProcessing)
 
-                    Button(action: { Task { await viewModel.restore() } }) {
+                    Button(action: { Task { await viewModel.startRestoreFlow() } }) {
                         Text("Restore Purchases")
                             .font(.subheadline)
                     }
                 }
+                
+                if !viewModel.errorMessage.isEmpty {
+                    Text(viewModel.errorMessage)
+                        .font(.footnote)
+                        .foregroundColor(.red)
+                        .multilineTextAlignment(.center)
+                }
 
                 Spacer()
-                Text("7-day free trial for new users")
-                    .font(.footnote)
-                    .foregroundColor(.secondary)
-                    .padding(.bottom, 8)
+
+                VStack(spacing: 6) {
+                    Text("Subscription billed via Apple ID.")
+                    Text("Sign in with Apple required to continue.")
+                }
+                .font(.footnote)
+                .foregroundColor(.secondary)
             }
             .padding()
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } } }
-            .task { await viewModel.refreshEntitlement(); await viewModel.beginTrialIfEligible() }
-        }
-    }
-}
-
-@available(iOS 15.0, *)
-private struct AsyncLabel: View {
-    @ObservedObject var daysRemainingSource: SubscriptionViewModel
-    @State private var days: Int = 0
-    init(daysRemaining: SubscriptionViewModel) { self.daysRemainingSource = daysRemaining }
-    var body: some View {
-        Group {
-            if days > 0 {
-                Text("Trial: \(days) days left")
-                    .font(.subheadline)
-                    .foregroundColor(.green)
+            .task { await viewModel.refreshEntitlement() }
+            .onChange(of: viewModel.entitlementStatus) { _, newValue in
+                onEntitlementChanged?(newValue)
             }
         }
-        .task { days = await daysRemainingSource.trialDaysRemaining() }
     }
 }
-
-
 

@@ -10,7 +10,7 @@ import Combine
 @testable import PeeLog
 
 // Simple stub service to simulate RemoteAnalyticsService behavior via the repository
-final class StubAnalyticsRepository: AnalyticsRepository {
+final class StubAnalyticsRepository: AnalyticsRepository, @unchecked Sendable {
     enum Mode { case remote, cache, failure }
     let mode: Mode
 
@@ -19,9 +19,9 @@ final class StubAnalyticsRepository: AnalyticsRepository {
     func fetchOverview(range: AnalyticsRange) async throws -> Sourced<OverviewFromServer> {
         switch mode {
         case .remote:
-            return Sourced(data: .init(stats: .init(totalEvents: 10, thisWeekEvents: 3, averageDaily: 1.0, healthScore: 0.8), interpretationLabel: "Good", interpretationSeverity: "info"), source: .remote)
+            return Sourced(data: .init(stats: .init(totalEvents: 10, thisWeekEvents: 3, averageDaily: 1.0, healthScore: 0.8, activeDays: 3), interpretationLabel: "Good", interpretationSeverity: "info"), source: .remote)
         case .cache:
-            return Sourced(data: .init(stats: .init(totalEvents: 8, thisWeekEvents: 2, averageDaily: 0.8, healthScore: 0.7), interpretationLabel: "Cached", interpretationSeverity: "info"), source: .cache)
+            return Sourced(data: .init(stats: .init(totalEvents: 8, thisWeekEvents: 2, averageDaily: 0.8, healthScore: 0.7, activeDays: 2), interpretationLabel: "Cached", interpretationSeverity: "info"), source: .cache)
         case .failure:
             struct E: Error {}
             throw E()
@@ -67,13 +67,33 @@ final class StubAnalyticsRepository: AnalyticsRepository {
         case .failure: struct E: Error {}; throw E()
         }
     }
+
+    func fetchDailyQualitySummaries(range: AnalyticsRange) async throws -> Sourced<[DailyQualitySummary]> {
+        let sample = [
+            DailyQualitySummary(id: "2026-01-01", date: Date(), eventCount: 1, label: "Good", color: "green")
+        ]
+        switch mode {
+        case .remote: return Sourced(data: sample, source: .remote)
+        case .cache:  return Sourced(data: sample, source: .cache)
+        case .failure: struct E: Error {}; throw E()
+        }
+    }
+}
+
+final class StubAIInsightRepository: AIInsightRepository, @unchecked Sendable {
+    func fetchDailyInsight() async throws -> AIInsight? { nil }
+    func fetchWeeklyInsight() async throws -> AIInsight? { nil }
+    func fetchCustomInsight() async throws -> AIInsight? { nil }
+    func askAI(question: String) async throws -> AskAIResponse { AskAIResponse(insight: "") }
+    func checkAskAIStatus() async -> AskAIStatus { AskAIStatus(canAsk: true, hoursRemaining: 0) }
+    func saveTimezone() async throws {}
 }
 
 @MainActor
 struct AnalyticsFallbackTests {
 
     private func makeViewModel(repo: AnalyticsRepository) -> StatisticsViewModel {
-        return StatisticsViewModel(analyticsRepository: repo)
+        return StatisticsViewModel(analyticsRepository: repo, aiInsightRepository: StubAIInsightRepository())
     }
 
     @Test func loadsFromRemoteWhenAvailable() async throws {

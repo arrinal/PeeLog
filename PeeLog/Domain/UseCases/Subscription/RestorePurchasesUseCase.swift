@@ -11,7 +11,9 @@ import Foundation
 final class RestorePurchasesUseCase {
     private let repository: SubscriptionRepository
     init(repository: SubscriptionRepository) { self.repository = repository }
-    func execute() async -> Bool { await repository.restore() }
+    func execute(userId: UUID) async -> PurchaseResult {
+        await repository.restoreAndClaim(userId: userId)
+    }
 }
 
 

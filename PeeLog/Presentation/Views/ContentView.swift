@@ -12,16 +12,17 @@ import Combine
 struct ContentView: View {
     @Environment(\.dependencyContainer) private var container
     @Environment(\.modelContext) private var modelContext
+    @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = false
     @State private var authState: AuthenticationState = .checking
     @State private var currentUser: User?
     @State private var cancellables = Set<AnyCancellable>()
     @State private var lastSyncedUserId: UUID?
+    @State private var entitlementStatus: EntitlementStatus = .notEntitled
     @State private var showOnlineToast = false
     @State private var wasOffline = false
     @ObservedObject private var networkMonitor = NetworkMonitor.shared
     @State private var serverToastMessage: String? = nil
     @State private var lastServerToastAt: Date = .distantPast
-    @State private var showPaywall = false
     
     private func triggerSyncIfNeeded(for user: User, reason: SyncCoordinator.SyncReason) {
         if lastSyncedUserId != user.id {
@@ -44,39 +45,9 @@ struct ContentView: View {
             case .checking:
                 loadingView
                     .transition(.opacity)
-            case .authenticated(let user):
-                ZStack(alignment: .top) {
-                    mainTabView
-                    connectivityOverlay
-                }
-                .transition(.asymmetric(
-                    insertion: .opacity.combined(with: .scale(scale: 1.05)),
-                    removal: .opacity.combined(with: .scale(scale: 0.95))
-                ))
-                .onAppear {
-                    currentUser = user
-                    triggerSyncIfNeeded(for: user, reason: .appLaunch)
-                    Task { @MainActor in
-                        // Check subscription entitlement/trial
-                        let subVM = container.makeSubscriptionViewModel(modelContext: modelContext)
-                        await subVM.beginTrialIfEligible()
-                        await subVM.refreshEntitlement()
-                        showPaywall = !subVM.isEntitled
-                    }
-                }
-            case .unauthenticated:
-                AuthenticationView.makeWithDependencies(
-                    container: container,
-                    modelContext: modelContext
-                )
-                .transition(.asymmetric(
-                    insertion: .opacity.combined(with: .move(edge: .bottom)),
-                    removal: .opacity
-                ))
+            default:
+                gateView
             }
-        }
-        .fullScreenCover(isPresented: $showPaywall) {
-            PaywallView(viewModel: container.makeSubscriptionViewModel(modelContext: modelContext))
         }
         .task {
             // IMPORTANT: Set up observer FIRST so we catch any auth state changes
@@ -86,6 +57,7 @@ struct ContentView: View {
 
             // Only run our check if observer hasn't already resolved the state
             await checkAuthenticationState()
+            await refreshEntitlementStatus()
             NotificationCenter.default.addObserver(forName: .requestInitialFullSync, object: nil, queue: .main) { _ in
                 Task { @MainActor in
                     let sync = container.makeSyncCoordinator(modelContext: modelContext)
@@ -108,6 +80,35 @@ struct ContentView: View {
         }
     }
     
+    @ViewBuilder
+    private var gateView: some View {
+        if !hasSeenOnboarding {
+            OnboardingView {
+                hasSeenOnboarding = true
+            }
+        } else if entitlementStatus == .entitled, case .authenticated(let user) = authState {
+            ZStack(alignment: .top) {
+                mainTabView
+                connectivityOverlay
+            }
+            .transition(.asymmetric(
+                insertion: .opacity.combined(with: .scale(scale: 1.05)),
+                removal: .opacity.combined(with: .scale(scale: 0.95))
+            ))
+            .onAppear {
+                currentUser = user
+                triggerSyncIfNeeded(for: user, reason: .appLaunch)
+            }
+        } else {
+            PaywallView(
+                viewModel: container.makeSubscriptionViewModel(modelContext: modelContext),
+                onEntitlementChanged: { status in
+                    entitlementStatus = status
+                }
+            )
+        }
+    }
+
     @ViewBuilder
     private var loadingView: some View {
         ZStack {
@@ -176,7 +177,12 @@ struct ContentView: View {
             withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
                 authState = .authenticated(user)
             }
-            triggerSyncIfNeeded(for: user, reason: .authResolved)
+            Task { @MainActor in
+                await refreshEntitlementStatus()
+                if entitlementStatus == .entitled {
+                    triggerSyncIfNeeded(for: user, reason: .authResolved)
+                }
+            }
         case .unauthenticated:
             // IMPORTANT: Only transition to unauthenticated if we were previously authenticated.
             // This is the sign-out case. Never go checking → unauthenticated directly.
@@ -187,6 +193,7 @@ struct ContentView: View {
             withAnimation(.easeInOut(duration: 0.4)) {
                 authState = .unauthenticated
             }
+            entitlementStatus = .notEntitled
         case .error:
             // IMPORTANT: Do not kick the user to login for transient/offline auth errors.
             // Check both network status AND ensure we're currently authenticated before kicking out.
@@ -281,6 +288,13 @@ struct ContentView: View {
                 }
             }
         }
+    }
+
+    private func refreshEntitlementStatus() async {
+        let subRepo = container.getSubscriptionRepository()
+        let userRepo = container.makeUserRepository(modelContext: modelContext)
+        let useCase = CheckSubscriptionStatusUseCase(repository: subRepo, userRepository: userRepo)
+        entitlementStatus = await useCase.execute()
     }
     
     private func updateTheme(from user: User?) {
