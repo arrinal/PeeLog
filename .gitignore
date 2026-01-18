@@ -1,4 +1,7 @@
 backend/*
-
+*/xcuserdata/*
+Package.resolved
 # Firebase configuration files
 **/GoogleService-Info.plist
+.claude/
+.cursor/
