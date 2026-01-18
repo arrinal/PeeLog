@@ -43,10 +43,10 @@ enum PeeQuality: String, Codable, CaseIterable {
     var emoji: String {
         switch self {
         case .clear: return "💧"
-        case .paleYellow: return "🌟"
-        case .yellow: return "⚠️"
-        case .darkYellow: return "🚨"
-        case .amber: return "🔥"
+        case .paleYellow: return "✅"
+        case .yellow: return "👍"
+        case .darkYellow: return "🥤"
+        case .amber: return "⚠️"
         }
     }
 } 

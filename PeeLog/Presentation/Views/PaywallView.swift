@@ -61,13 +61,6 @@ struct PaywallView: View {
                 }
 
                 Spacer()
-
-                VStack(spacing: 6) {
-                    Text("Subscription billed via Apple ID.")
-                    Text("Sign in with Apple required to continue.")
-                }
-                .font(.footnote)
-                .foregroundColor(.secondary)
             }
             .padding()
             .navigationBarTitleDisplayMode(.inline)
