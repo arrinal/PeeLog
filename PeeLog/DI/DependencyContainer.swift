@@ -215,6 +215,7 @@ class DependencyContainer: ObservableObject {
         let userRepository = getUserRepository(modelContext: modelContext)
         let peeEventRepository = getPeeEventRepository(modelContext: modelContext)
         let syncCoordinator = makeSyncCoordinator(modelContext: modelContext)
+        let exportDataUseCase = ExportDataUseCase(peeEventRepository: peeEventRepository)
         
         return ProfileViewModel(
             authenticateUserUseCase: AuthenticateUserUseCase(
@@ -230,6 +231,7 @@ class DependencyContainer: ObservableObject {
                 userRepository: userRepository,
                 errorHandlingUseCase: errorHandlingUseCase
             ),
+            exportDataUseCase: exportDataUseCase,
             userRepository: userRepository,
             errorHandlingUseCase: errorHandlingUseCase,
             peeEventRepository: peeEventRepository,

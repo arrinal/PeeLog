@@ -10,6 +10,7 @@ import Foundation
 @MainActor
 protocol PeeEventRepository {
     func getAllEvents() -> [PeeEvent]
+    func fetchAllEvents() throws -> [PeeEvent]
     func getEventsForToday() -> [PeeEvent]
     func addEvent(_ event: PeeEvent) throws
     func deleteEvent(_ event: PeeEvent) throws

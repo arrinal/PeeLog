@@ -15,6 +15,7 @@ final class ProfileViewModel: ObservableObject {
     private let authenticateUserUseCase: AuthenticateUserUseCaseProtocol
     private let createUserProfileUseCase: CreateUserProfileUseCaseProtocol
     private let updateUserPreferencesUseCase: UpdateUserPreferencesUseCaseProtocol
+    private let exportDataUseCase: ExportDataUseCaseProtocol
     private let userRepository: UserRepository
     private let peeEventRepository: PeeEventRepository
     private let syncCoordinator: SyncCoordinator
@@ -43,7 +44,7 @@ final class ProfileViewModel: ObservableObject {
     @Published var showSignOutAlert = false
     @Published var showSignOutConfirmation = false
     @Published var showDataExportSheet = false
-    @Published var exportedData: Data?
+    @Published var exportFileURL: URL?
     @Published var isExporting = false
     
     // MARK: - Internal State
@@ -55,6 +56,7 @@ final class ProfileViewModel: ObservableObject {
         authenticateUserUseCase: AuthenticateUserUseCaseProtocol,
         createUserProfileUseCase: CreateUserProfileUseCaseProtocol,
         updateUserPreferencesUseCase: UpdateUserPreferencesUseCaseProtocol,
+        exportDataUseCase: ExportDataUseCaseProtocol,
         userRepository: UserRepository,
         errorHandlingUseCase: ErrorHandlingUseCase,
         peeEventRepository: PeeEventRepository,
@@ -63,6 +65,7 @@ final class ProfileViewModel: ObservableObject {
         self.authenticateUserUseCase = authenticateUserUseCase
         self.createUserProfileUseCase = createUserProfileUseCase
         self.updateUserPreferencesUseCase = updateUserPreferencesUseCase
+        self.exportDataUseCase = exportDataUseCase
         self.userRepository = userRepository
         self.errorHandlingUseCase = errorHandlingUseCase
         self.peeEventRepository = peeEventRepository
@@ -339,10 +342,11 @@ final class ProfileViewModel: ObservableObject {
         isExporting = true
         isLoading = true
         clearErrors()
+        exportFileURL = nil
         
         do {
-            let data = try await userRepository.exportUserData()
-            exportedData = data
+            let url = try await exportDataUseCase.exportToCSV()
+            exportFileURL = url
             showDataExportSheet = true
         } catch {
             handleError(error)

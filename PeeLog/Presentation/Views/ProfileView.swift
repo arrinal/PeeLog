@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import UIKit
 
 struct ProfileView: View {
     @StateObject private var viewModel: ProfileViewModel
@@ -61,6 +62,13 @@ struct ProfileView: View {
             secondaryDestructive: false,
             onSecondary: { }
         )
+        .sheet(isPresented: $viewModel.showDataExportSheet) {
+            if let url = viewModel.exportFileURL {
+                ShareSheet(activityItems: [url])
+            } else {
+                Text("Unable to prepare export file.")
+            }
+        }
         .task {
             await viewModel.loadUserProfile()
         }
@@ -285,4 +293,15 @@ private extension ProfileView {
         .environment(\.dependencyContainer, container)
         .modelContainer(modelContainer)
 } 
+
+// MARK: - Share Sheet
+struct ShareSheet: UIViewControllerRepresentable {
+    let activityItems: [Any]
+    
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+    }
+    
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
  

@@ -25,6 +25,13 @@ class PeeEventRepositoryImpl: PeeEventRepository {
             return []
         }
     }
+
+    func fetchAllEvents() throws -> [PeeEvent] {
+        let descriptor = FetchDescriptor<PeeEvent>(
+            sortBy: [SortDescriptor(\.timestamp, order: .forward)]
+        )
+        return try modelContext.fetch(descriptor)
+    }
     
     func getEventsForToday() -> [PeeEvent] {
         return getAllEvents().filter { CalendarUtility.isDateInToday($0.timestamp) }
