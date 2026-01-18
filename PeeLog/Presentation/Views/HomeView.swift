@@ -128,7 +128,7 @@ struct HomeView: View {
                                     ForEach(viewModel.todaysEvents, id: \.id) { event in
                                         EventCard(
                                             event: event,
-                                            onLocationTap: {
+                                            onTap: {
                                                 selectedEvent = event
                                                 showingMapSheet = true
                                             },
@@ -160,7 +160,7 @@ struct HomeView: View {
                 .refreshable {
                     let userRepository = container.makeUserRepository(modelContext: modelContext)
                     let user = await userRepository.getCurrentUser()
-                    if user != nil {
+                    if user != nil, NetworkMonitor.shared.isOnline {
                         NotificationCenter.default.post(name: .requestInitialFullSync, object: nil)
                     }
                     await MainActor.run {
@@ -220,7 +220,7 @@ struct HomeView: View {
                 selectedEvent = nil
             }) {
                 if let selectedEvent = selectedEvent {
-                    LocationMapView(event: selectedEvent)
+                    PeeLogDetailSheetView(event: selectedEvent)
                         .ignoresSafeArea(.container, edges: .top)
                 }
             }
@@ -228,8 +228,8 @@ struct HomeView: View {
                 if isStoreResetting {
                     showingMapSheet = false
                     selectedEvent = nil
-                } else if let event = newValue, event.hasLocation {
-                    showingMapSheet = true
+            } else if newValue != nil {
+                showingMapSheet = true
                 }
             }
         }
@@ -304,7 +304,7 @@ struct HomeView: View {
 // MARK: - Event Card Component
 struct EventCard: View {
     let event: PeeEvent
-    let onLocationTap: () -> Void
+    let onTap: () -> Void
     let onDelete: () -> Void
     
     @Environment(\.colorScheme) private var colorScheme
@@ -389,39 +389,41 @@ struct EventCard: View {
                                     )
                             )
                     }
-                    
-                    if let notes = event.notes, !notes.isEmpty {
-                        Text(notes)
-                            .font(.system(size: 14))
-                            .foregroundColor(.secondary)
-                            .lineLimit(2)
-                    }
-                    
-                    if event.hasLocation, let locationName = event.locationName {
-                        Button(action: onLocationTap) {
-                            HStack(spacing: 6) {
-                                Image(systemName: "mappin.circle.fill")
-                                    .font(.system(size: 14))
-                                    .foregroundColor(.red)
-                                Text(locationName)
-                                    .font(.system(size: 13, weight: .medium))
-                                    .foregroundColor(.blue)
+                    ///
+                    HStack(alignment: .top) {
+                        VStack(alignment: .leading) {
+                            if event.hasLocation, let locationName = event.locationName {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "mappin.circle.fill")
+                                        .font(.system(size: 14))
+                                        .foregroundColor(.red)
+                                    Text(locationName)
+                                        .font(.system(size: 13, weight: .medium))
+                                        .foregroundColor(.blue)
+                                }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(
+                                    Capsule()
+                                        .fill(Color.blue.opacity(0.1))
+                                )
                             }
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(
-                                Capsule()
-                                    .fill(Color.blue.opacity(0.1))
-                            )
+                            
+                            if let notes = event.notes, !notes.isEmpty {
+                                Text(notes)
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.secondary)
+                                    .lineLimit(2)
+                            }
                         }
+                        Spacer()
+                        Text(event.quality.description)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.secondary)
+                            .padding(.top, 5)
                     }
-                    
-                    Text(event.quality.description)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.secondary)
                 }
-                
-                Spacer()
+//                Spacer()
             }
             .padding(20)
             .background(
@@ -440,6 +442,14 @@ struct EventCard: View {
             .scaleEffect(isDeleting ? 0.9 : 1.0)
             .opacity(isDeleting ? 0.4 : 1.0)
             .animation(.none, value: offset)
+            .contentShape(Rectangle())
+            .highPriorityGesture(
+                TapGesture()
+                    .onEnded {
+                        guard !isDeleting, !isDragging, offset == 0 else { return }
+                        onTap()
+                    }
+            )
             .simultaneousGesture(
                 DragGesture(minimumDistance: 20, coordinateSpace: .local)
                     .onChanged { value in

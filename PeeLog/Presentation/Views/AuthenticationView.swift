@@ -16,24 +16,9 @@ struct AuthenticationView: View {
     // Callback for when authentication is successful
     private let onAuthenticationSuccess: (() -> Void)?
     
-    init(onAuthenticationSuccess: (() -> Void)? = nil) {
-        // Temporary initialization - will be replaced when called from ContentView
+    init(viewModel: AuthenticationViewModel, onAuthenticationSuccess: (() -> Void)? = nil) {
         self.onAuthenticationSuccess = onAuthenticationSuccess
-        self._viewModel = StateObject(wrappedValue: AuthenticationViewModel(
-            authenticateUserUseCase: AuthenticateUserUseCase(
-                authRepository: AuthRepositoryImpl(
-                    firebaseAuthService: FirebaseAuthService(),
-                    modelContext: ModelContext(try! ModelContainer(for: User.self))
-                ),
-                userRepository: UserRepositoryImpl(modelContext: ModelContext(try! ModelContainer(for: User.self))),
-                errorHandlingUseCase: ErrorHandlingUseCaseImpl()
-            ),
-            createUserProfileUseCase: CreateUserProfileUseCase(
-                userRepository: UserRepositoryImpl(modelContext: ModelContext(try! ModelContainer(for: User.self))),
-                errorHandlingUseCase: ErrorHandlingUseCaseImpl()
-            ),
-            errorHandlingUseCase: ErrorHandlingUseCaseImpl()
-        ))
+        self._viewModel = StateObject(wrappedValue: viewModel)
     }
     
     var body: some View {
@@ -460,12 +445,16 @@ extension AuthenticationView {
         modelContext: ModelContext,
         onAuthenticationSuccess: (() -> Void)? = nil
     ) -> AuthenticationView {
-        var view = AuthenticationView(onAuthenticationSuccess: onAuthenticationSuccess)
-        view._viewModel = StateObject(wrappedValue: container.makeAuthenticationViewModel(modelContext: modelContext))
-        return view
+        let viewModel = container.makeAuthenticationViewModel(modelContext: modelContext)
+        return AuthenticationView(viewModel: viewModel, onAuthenticationSuccess: onAuthenticationSuccess)
     }
 }
 
 #Preview {
-    AuthenticationView()
+    let modelContainer = try! ModelContainer(for: User.self)
+    let container = DependencyContainer()
+    
+    return AuthenticationView(viewModel: container.makeAuthenticationViewModel(modelContext: modelContainer.mainContext))
+        .environment(\.dependencyContainer, container)
+        .modelContainer(modelContainer)
 } 

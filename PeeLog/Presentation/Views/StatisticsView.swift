@@ -333,6 +333,11 @@ struct StatisticsView: View {
                 .font(.subheadline)
                 .foregroundColor(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
+            
+            Text("Urine color is a general indicator of hydration. Both clear and pale yellow indicate excellent hydration. Many factors affect urine color including medications and foods.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
             if viewModel.isLoadingTrends {
                 RoundedRectangle(cornerRadius: 16)
@@ -353,9 +358,10 @@ struct StatisticsView: View {
                     // Chart
                     Chart {
                         ForEach(viewModel.qualityTrendData) { dataPoint in
+                            let displayQuality = normalizedQualityScore(dataPoint.averageQuality)
                             LineMark(
                                 x: .value("Date", dataPoint.date),
-                                y: .value("Quality", dataPoint.averageQuality)
+                                y: .value("Quality", displayQuality)
                             )
                             .foregroundStyle(.blue)
                             .lineStyle(StrokeStyle(lineWidth: 2))
@@ -363,7 +369,7 @@ struct StatisticsView: View {
                             if showPoints {
                                 PointMark(
                                     x: .value("Date", dataPoint.date),
-                                    y: .value("Quality", dataPoint.averageQuality)
+                                    y: .value("Quality", displayQuality)
                                 )
                                 .foregroundStyle(.blue)
                                 .symbolSize(40)
@@ -378,21 +384,21 @@ struct StatisticsView: View {
 
                             PointMark(
                                 x: .value("Date", selected.date),
-                                y: .value("Quality", selected.averageQuality)
+                                y: .value("Quality", normalizedQualityScore(selected.averageQuality))
                             )
                             .foregroundStyle(.white)
                             .symbolSize(100)
 
                             PointMark(
                                 x: .value("Date", selected.date),
-                                y: .value("Quality", selected.averageQuality)
+                                y: .value("Quality", normalizedQualityScore(selected.averageQuality))
                             )
                             .foregroundStyle(.blue)
                             .symbolSize(60)
                         }
                     }
                     .frame(height: 180)
-                    .chartYScale(domain: 0...6)
+                    .chartYScale(domain: 0.5...4.5)
                     .chartXAxis {
                         AxisMarks(values: .automatic(desiredCount: min(dataCount, 5))) { value in
                             AxisGridLine()
@@ -406,7 +412,7 @@ struct StatisticsView: View {
                         }
                     }
                     .chartYAxis {
-                        AxisMarks(position: .trailing, values: [1, 2, 3, 4, 5]) { value in
+                        AxisMarks(position: .trailing, values: [1, 2, 3, 4]) { value in
                             AxisGridLine()
                             AxisTick()
                             AxisValueLabel {
@@ -450,7 +456,7 @@ struct StatisticsView: View {
                         Image(systemName: "arrow.up")
                             .font(.caption2)
                             .foregroundColor(.green)
-                        Text("Higher = Better (5 = Pale Yellow, 1 = Amber)")
+                        Text("Higher = Better (4 = Pale/Clear, 1 = Amber)")
                             .font(.caption2)
                             .foregroundColor(.secondary)
                     }
@@ -467,15 +473,18 @@ struct StatisticsView: View {
     }
 
     private func qualityScoreLabel(for value: Int) -> String {
-        // Evenly spaced scale: 5=Pale(best), 4=Clear, 3=Yellow, 2=Dark, 1=Amber(worst)
+        // Even spacing: 4=Pale/Clear, 3=Yellow, 2=Dark, 1=Amber
         switch value {
-        case 5: return "Pale"
-        case 4: return "Clear"
+        case 4: return "Pale/Clear"
         case 3: return "Yellow"
         case 2: return "Dark"
         case 1: return "Amber"
-        default: return "\(value)"
+        default: return ""
         }
+    }
+
+    private func normalizedQualityScore(_ value: Double) -> Double {
+        return min(4, max(1, value))
     }
 
     private func formatDateForAxis(_ date: Date, dataCount: Int) -> String {
@@ -487,7 +496,8 @@ struct StatisticsView: View {
 
     private func qualityTrendTooltip(for point: QualityTrendPoint) -> some View {
         let dateString = formatTooltipDate(point.date)
-        let qualityName = qualityScoreLabel(for: Int(point.averageQuality.rounded()))
+        let displayQuality = normalizedQualityScore(point.averageQuality)
+        let qualityName = qualityScoreLabel(for: Int(displayQuality.rounded()))
 
         return VStack(spacing: 4) {
             Text(dateString)

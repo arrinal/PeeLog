@@ -1,5 +1,5 @@
 //
-//  LocationMapView.swift
+//  PeeLogDetailSheetView.swift
 //  PeeLog
 //
 //  Created by Arrinal S on 06/05/25.
@@ -8,7 +8,7 @@
 import SwiftUI
 import MapKit
 
-struct LocationMapView: View {
+struct PeeLogDetailSheetView: View {
     let event: PeeEvent?
     @Environment(\.dismiss) private var dismiss
     @State private var mapCameraPosition: MapCameraPosition = .automatic
@@ -17,27 +17,29 @@ struct LocationMapView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                if let coordinate = snapshot.coordinate, let quality = snapshot.quality, let timestamp = snapshot.timestamp {
-                    // Map view
-                    Map(position: $mapCameraPosition) {
-                        Marker(snapshot.locationName ?? "Pee Location", coordinate: coordinate)
-                            .tint(.blue)
-                    }
-                    .transaction { tx in
-                        tx.disablesAnimations = true
-                    }
-                    .onAppear {
-                        // Set initial camera position when the view appears
-                        mapCameraPosition = .region(
-                            MKCoordinateRegion(
-                                center: coordinate,
-                                span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+                if let quality = snapshot.quality, let timestamp = snapshot.timestamp {
+                    if let coordinate = snapshot.coordinate {
+                        // Map view
+                        Map(position: $mapCameraPosition) {
+                            Marker(snapshot.locationName ?? "Pee Location", coordinate: coordinate)
+                                .tint(.red)
+                        }
+                        .transaction { tx in
+                            tx.disablesAnimations = true
+                        }
+                        .onAppear {
+                            // Set initial camera position when the view appears
+                            mapCameraPosition = .region(
+                                MKCoordinateRegion(
+                                    center: coordinate,
+                                    span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+                                )
                             )
-                        )
+                        }
+                        .frame(height: 300)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .padding(.horizontal)
                     }
-                    .frame(height: 300)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .padding(.horizontal)
                     
                     // Event details
                     VStack(alignment: .leading, spacing: 16) {
@@ -60,19 +62,21 @@ struct LocationMapView: View {
                         }
                         .padding(.bottom, 4)
                         
-                        Divider()
-                        
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                Image(systemName: "mappin.circle.fill")
-                                    .foregroundColor(.red)
-                                Text("Location")
-                                    .font(.headline)
-                            }
+                        if let locationName = snapshot.locationName, !locationName.isEmpty {
+                            Divider()
                             
-                            Text(snapshot.locationName ?? "Unknown location")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack {
+                                    Image(systemName: "mappin.circle.fill")
+                                        .foregroundColor(.red)
+                                    Text("Location")
+                                        .font(.headline)
+                                }
+                                
+                                Text(locationName)
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                            }
                         }
                         
                         if let notes = snapshot.notes, !notes.isEmpty {
@@ -129,7 +133,7 @@ struct LocationMapView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
-            .navigationTitle(snapshot.locationName ?? "Location")
+            .navigationTitle(snapshot.locationName ?? "PeeLog Detail")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -188,7 +192,7 @@ private struct EventSnapshot {
 }
 
 #Preview {
-    LocationMapView(event: PeeEvent(
+    PeeLogDetailSheetView(event: PeeEvent(
         timestamp: Date(),
         notes: "Test note",
         quality: .paleYellow,

@@ -26,17 +26,28 @@ final class AnalyticsRepositoryImpl: AnalyticsRepository {
     
     private func toPeriodRange(_ range: AnalyticsRange) -> RemoteAnalyticsService.PeriodRange {
         let p: String
+        var startDate = range.startDate
+        var endDate = range.endDate
         switch range.period {
         case .week: p = "week"
         case .month: p = "month"
         case .quarter: p = "quarter"
         case .allTime: p = "allTime"
         case .custom: p = "custom"
-        case .today, .yesterday, .last3Days, .lastWeek, .lastMonth:
-            // Map miscellaneous variants to week unless explicitly custom
+        case .today, .yesterday, .last3Days:
+            p = "custom"
+            // Backend requires explicit start/end for custom; derive if omitted.
+            if startDate == nil || endDate == nil {
+                let r = range.period.dateRange
+                startDate = r.start
+                endDate = r.end
+            }
+        case .lastWeek:
             p = "week"
+        case .lastMonth:
+            p = "month"
         }
-        return .init(period: p, startDate: range.startDate, endDate: range.endDate, timeZone: range.timeZone)
+        return .init(period: p, startDate: startDate, endDate: endDate, timeZone: range.timeZone)
     }
     
     func fetchOverview(range: AnalyticsRange) async throws -> Sourced<OverviewFromServer> {
@@ -191,6 +202,28 @@ final class AnalyticsRepositoryImpl: AnalyticsRepository {
                 return Sourced(data: data, source: .cache)
             }
             throw AnalyticsRepositoryError.noCacheAvailable(section: .insights, underlyingDescription: error.localizedDescription)
+        }
+    }
+
+    func fetchDailyQualitySummaries(range: AnalyticsRange) async throws -> Sourced<[DailyQualitySummary]> {
+        let pr = toPeriodRange(range)
+        _ = try await requireUid()
+        do {
+            let resp = try await service.fetchDailyQualitySummaries(range: pr)
+            let data = resp.map { item in
+                DailyQualitySummary(
+                    id: item.date,
+                    date: parseISODate(item.date),
+                    eventCount: item.eventCount,
+                    label: item.label,
+                    color: item.color
+                )
+            }
+            // Note: No caching for daily summaries as they change frequently with new events
+            return Sourced(data: data, source: .remote)
+        } catch {
+            // For now, return empty array on error (History view still shows events from local SwiftData)
+            return Sourced(data: [], source: .cache)
         }
     }
 }

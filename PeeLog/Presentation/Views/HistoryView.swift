@@ -12,6 +12,7 @@ import SwiftData
 
 struct HistoryView: View {
     @Environment(\.dependencyContainer) private var container
+    @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
     @Query(sort: \PeeEvent.timestamp, order: .reverse) private var allEvents: [PeeEvent]
@@ -22,6 +23,7 @@ struct HistoryView: View {
     @State private var showingMapSheet = false
     @State private var showingFilterSheet = false
     @State private var isStoreResetting = false
+    @State private var dailySummaries: [String: DailyQualitySummary] = [:] // keyed by ISO date
     
     var filteredEvents: [PeeEvent] {
         let range = selectedFilter == .custom ? (customStartDate, customEndDate) : selectedFilter.dateRange
@@ -126,7 +128,8 @@ struct HistoryView: View {
                                 DayGroupCard(
                                     date: group.date,
                                     events: group.events,
-                                    onLocationTap: { event in
+                                    backendSummary: summaryForDate(group.date),
+                                    onEventTap: { event in
                                         selectedEvent = event
                                         showingMapSheet = true
                                     }
@@ -149,18 +152,11 @@ struct HistoryView: View {
         }
         .navigationTitle("History")
         .navigationBarTitleDisplayMode(.large)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
-                Button(action: {
-                    dismiss()
-                }) {}
-            }
-        }
         .sheet(isPresented: $showingMapSheet, onDismiss: {
             selectedEvent = nil
         }) {
             if let selectedEvent = selectedEvent {
-                LocationMapView(event: selectedEvent)
+                PeeLogDetailSheetView(event: selectedEvent)
                     .ignoresSafeArea(.container, edges: .top)
             }
         }
@@ -176,7 +172,7 @@ struct HistoryView: View {
             if isStoreResetting {
                 showingMapSheet = false
                 selectedEvent = nil
-            } else if let event = newValue, event.hasLocation {
+            } else if newValue != nil {
                 showingMapSheet = true
             }
         }
@@ -190,6 +186,65 @@ struct HistoryView: View {
             // Allow view to re-query after reset completes
             isStoreResetting = false
         }
+        .task {
+            await fetchDailySummaries()
+        }
+        .onChange(of: selectedFilter) { _, _ in
+            Task { await fetchDailySummaries() }
+        }
+        .onChange(of: customStartDate) { _, _ in
+            if selectedFilter == .custom {
+                Task { await fetchDailySummaries() }
+            }
+        }
+        .onChange(of: customEndDate) { _, _ in
+            if selectedFilter == .custom {
+                Task { await fetchDailySummaries() }
+            }
+        }
+    }
+
+    private func fetchDailySummaries() async {
+        // Always request daily summaries using an explicit date range so older days
+        // (e.g. Last Month) still receive summary badges from the backend.
+        let start: Date
+        let end: Date
+        if selectedFilter == .custom {
+            start = customStartDate
+            end = customEndDate
+        } else {
+            let r = selectedFilter.dateRange
+            start = r.start
+            end = r.end
+        }
+        let range = AnalyticsRange(period: .custom, startDate: start, endDate: end, timeZone: .current)
+
+        let analyticsRepo = container.getAnalyticsRepository()
+        do {
+            let result = try await analyticsRepo.fetchDailyQualitySummaries(range: range)
+            var dict: [String: DailyQualitySummary] = [:]
+            for summary in result.data {
+                dict[summary.id] = summary
+            }
+            await MainActor.run {
+                dailySummaries = dict
+            }
+        } catch {
+            // On error, summaries stay empty and DayGroupCard will show loading/placeholder
+        }
+    }
+
+    private func summaryForDate(_ date: Date) -> DailyQualitySummary? {
+        let calendar = Calendar.current
+        let targetDay = calendar.startOfDay(for: date)
+        
+        for summary in dailySummaries.values {
+            let summaryDay = calendar.startOfDay(for: summary.date)
+            if calendar.isDate(targetDay, inSameDayAs: summaryDay) {
+                return summary
+            }
+        }
+        return nil
     }
     
     // MARK: - Adaptive Colors
@@ -253,10 +308,11 @@ struct HistoryView: View {
 struct DayGroupCard: View {
     let date: Date
     let events: [PeeEvent]
-    let onLocationTap: (PeeEvent) -> Void
-    
+    let backendSummary: DailyQualitySummary?
+    let onEventTap: (PeeEvent) -> Void
+
     @Environment(\.colorScheme) private var colorScheme
-    
+
     var body: some View {
         VStack(spacing: 16) {
             // Date Header
@@ -269,25 +325,38 @@ struct DayGroupCard: View {
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(.secondary)
                 }
-                
+
                 Spacer()
-                
-                // Day Summary Badge
-                Text(dayQualitySummary())
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(
-                        Capsule()
-                            .fill(dayQualityColor())
-                    )
+
+                // Day Summary Badge - Use backend summary if available
+                if let summary = backendSummary {
+                    Text(summary.label)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(
+                            Capsule()
+                                .fill(summary.displayColor)
+                        )
+                } else {
+                    // Loading placeholder while fetching from backend
+                    Text("...")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(
+                            Capsule()
+                                .fill(Color.gray)
+                        )
+                }
             }
             
             // Events
             VStack(spacing: 12) {
                 ForEach(events.sorted { $0.timestamp > $1.timestamp }) { event in
-                    HistoryEventCard(event: event, onLocationTap: onLocationTap)
+                    HistoryEventCard(event: event, onEventTap: onEventTap)
                 }
             }
         }
@@ -309,7 +378,7 @@ struct DayGroupCard: View {
     private func formattedDate(_ date: Date) -> String {
         let formatter = DateFormatter()
         let calendar = CalendarUtility.current
-        
+
         if calendar.isDateInToday(date) {
             return "Today"
         } else if calendar.isDateInYesterday(date) {
@@ -319,77 +388,12 @@ struct DayGroupCard: View {
             return formatter.string(from: date)
         }
     }
-    
-    private func dayQualitySummary() -> String {
-        guard !events.isEmpty else { return "No data" }
-        
-        // Based on medical research: pale yellow is optimal, clear is overhydrated
-        let summary = QualityFilteringUtility.getQualityDistributionSummary(from: events)
-        let optimalCount = summary.optimalCount
-        let overhydratedCount = summary.overhydratedCount
-        let mildlyDehydratedCount = summary.mildlyDehydratedCount
-        let dehydratedCount = summary.dehydratedCount
-        let severelyDehydratedCount = summary.severelyDehydratedCount
-        let totalCount = events.count
-        
-        let optimalPercentage = Double(optimalCount) / Double(totalCount)
-        let overhydratedPercentage = Double(overhydratedCount) / Double(totalCount)
-        let mildlyDehydratedPercentage = Double(mildlyDehydratedCount) / Double(totalCount)
-        let dehydratedPercentage = Double(dehydratedCount + severelyDehydratedCount) / Double(totalCount)
-        
-        // Medical-based assessment with proper categorization
-        if optimalPercentage >= 0.7 && dehydratedPercentage <= 0.1 && overhydratedPercentage <= 0.1 {
-            return "Excellent hydration"
-        } else if optimalPercentage >= 0.5 && dehydratedPercentage <= 0.2 && overhydratedPercentage <= 0.2 {
-            return "Good hydration"
-        } else if optimalPercentage >= 0.3 && dehydratedPercentage <= 0.4 && overhydratedPercentage <= 0.3 {
-            return "Fair hydration"
-        } else if dehydratedPercentage >= 0.5 || severelyDehydratedCount > 0 {
-            return "Poor hydration - needs attention"
-        } else if overhydratedPercentage >= 0.5 {
-            return "Overhydration - monitor intake"
-        } else {
-            return "Mixed hydration levels"
-        }
-    }
-    
-    private func dayQualityColor() -> Color {
-        guard !events.isEmpty else { return .gray }
-        
-        let summary = QualityFilteringUtility.getQualityDistributionSummary(from: events)
-        let optimalCount = summary.optimalCount
-        let overhydratedCount = summary.overhydratedCount
-        let mildlyDehydratedCount = summary.mildlyDehydratedCount
-        let dehydratedCount = summary.dehydratedCount
-        let severelyDehydratedCount = summary.severelyDehydratedCount
-        let totalCount = events.count
-        
-        let optimalPercentage = Double(optimalCount) / Double(totalCount)
-        let overhydratedPercentage = Double(overhydratedCount) / Double(totalCount)
-        let mildlyDehydratedPercentage = Double(mildlyDehydratedCount) / Double(totalCount)
-        let dehydratedPercentage = Double(dehydratedCount + severelyDehydratedCount) / Double(totalCount)
-        
-        // Color coding based on medical standards
-        if optimalPercentage >= 0.7 && dehydratedPercentage <= 0.1 && overhydratedPercentage <= 0.1 {
-            return .green // Excellent
-        } else if optimalPercentage >= 0.5 && dehydratedPercentage <= 0.2 && overhydratedPercentage <= 0.2 {
-            return Color(red: 0.6, green: 0.8, blue: 0.2) // Good (light green)
-        } else if optimalPercentage >= 0.3 && dehydratedPercentage <= 0.4 && overhydratedPercentage <= 0.3 {
-            return .orange // Fair
-        } else if dehydratedPercentage >= 0.5 || severelyDehydratedCount > 0 {
-            return .red // Poor
-        } else if overhydratedPercentage >= 0.5 {
-            return .blue // Overhydration
-        } else {
-            return Color(red: 0.8, green: 0.6, blue: 0.2) // Mixed (yellowish)
-        }
-    }
 }
 
 // MARK: - History Event Card
 struct HistoryEventCard: View {
     let event: PeeEvent
-    let onLocationTap: (PeeEvent) -> Void
+    let onEventTap: (PeeEvent) -> Void
     
     @Environment(\.colorScheme) private var colorScheme
     
@@ -434,17 +438,11 @@ struct HistoryEventCard: View {
                                 )
                         )
                 }
+                ///
                 
-                if let notes = event.notes, !notes.isEmpty {
-                    Text(notes)
-                        .font(.system(size: 13))
-                        .foregroundColor(.secondary)
-                        .lineLimit(2)
-                }
-                
-                HStack {
-                    if event.hasLocation, let locationName = event.locationName {
-                        Button(action: { onLocationTap(event) }) {
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading) {
+                        if event.hasLocation, let locationName = event.locationName {
                             HStack(spacing: 4) {
                                 Image(systemName: "mappin.circle.fill")
                                     .font(.system(size: 12))
@@ -460,6 +458,13 @@ struct HistoryEventCard: View {
                                     .fill(Color.blue.opacity(0.1))
                             )
                         }
+                        
+                        if let notes = event.notes, !notes.isEmpty {
+                            Text(notes)
+                                .font(.system(size: 13))
+                                .foregroundColor(.secondary)
+                                .lineLimit(2)
+                        }
                     }
                     
                     Spacer()
@@ -467,6 +472,7 @@ struct HistoryEventCard: View {
                     Text(event.quality.description)
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(.secondary)
+                        .padding(.top, 4)
                 }
             }
         }
@@ -476,6 +482,10 @@ struct HistoryEventCard: View {
                 .fill(Color(.systemGray6).opacity(colorScheme == .dark ? 0.3 : 1.0))
                 .stroke(Color(.systemGray4).opacity(0.5), lineWidth: 1)
         )
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onEventTap(event)
+        }
     }
 }
 

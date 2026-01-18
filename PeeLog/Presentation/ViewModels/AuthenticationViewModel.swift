@@ -413,7 +413,6 @@ final class AuthenticationViewModel: ObservableObject {
         authState = .authenticated(user)
         if syncControl?.isBlocked == true {
             syncControl?.isBlocked = false
-            NotificationCenter.default.post(name: .requestInitialFullSync, object: nil)
         }
     }
 } 

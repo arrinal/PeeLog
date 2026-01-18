@@ -69,7 +69,7 @@ struct MapHistoryView: View {
         .sheet(isPresented: $showingSheet) {
             if let selected = selectedAnnotation {
                 let matchedEvent = viewModel.eventsWithLocation.first(where: { $0.id == selected.id })
-                LocationMapView(event: matchedEvent)
+                PeeLogDetailSheetView(event: matchedEvent)
             }
         }
     }

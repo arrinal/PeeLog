@@ -27,8 +27,17 @@ final class FirebaseAuthService: ObservableObject {
     // MARK: - Auth State Management
     
     private func updateAuthState() {
-        currentFirebaseUser = Auth.auth().currentUser
-        isSignedIn = currentFirebaseUser != nil
+        let newUser = Auth.auth().currentUser
+        let newUserId = newUser?.uid
+        let oldUserId = currentFirebaseUser?.uid
+        let newSignedIn = newUser != nil
+        
+        guard newUserId != oldUserId || newSignedIn != isSignedIn else {
+            return
+        }
+        
+        currentFirebaseUser = newUser
+        isSignedIn = newSignedIn
     }
     
     // MARK: - Email/Password Authentication

@@ -30,7 +30,31 @@ protocol AnalyticsRepository: AnyObject, Sendable {
     func fetchQualityDistribution(range: AnalyticsRange) async throws -> Sourced<[QualityDistribution]>
     func fetchWeekly() async throws -> Sourced<[WeeklyData]>
     func fetchInsights(range: AnalyticsRange) async throws -> Sourced<[HealthInsight]>
+    func fetchDailyQualitySummaries(range: AnalyticsRange) async throws -> Sourced<[DailyQualitySummary]>
 }
+
+// MARK: - Daily Quality Summary (for History View)
+struct DailyQualitySummary: Identifiable, Sendable {
+    let id: String // ISO date string
+    let date: Date
+    let eventCount: Int
+    let label: String
+    let color: String
+
+    var displayColor: SwiftUI.Color {
+        switch color {
+        case "green": return .green
+        case "lightGreen": return SwiftUI.Color(red: 0.6, green: 0.8, blue: 0.2)
+        case "yellow": return .yellow
+        case "orange": return .orange
+        case "red": return .red
+        case "yellowOrange": return SwiftUI.Color(red: 0.8, green: 0.6, blue: 0.2)
+        default: return .gray
+        }
+    }
+}
+
+import SwiftUI
 
 // MARK: - Overview DTO from server
 struct OverviewFromServer {

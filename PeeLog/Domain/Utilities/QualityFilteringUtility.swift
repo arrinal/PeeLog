@@ -17,23 +17,23 @@ struct QualityFilteringUtility {
         return events.filter { $0.quality == .paleYellow }
     }
     
-    /// Returns events with overhydrated quality (clear)
-    static func getOverhydratedEvents(from events: [PeeEvent]) -> [PeeEvent] {
+    /// Returns events with well-hydrated quality (clear)
+    static func getWellHydratedEvents(from events: [PeeEvent]) -> [PeeEvent] {
         return events.filter { $0.quality == .clear }
     }
     
-    /// Returns events with mildly dehydrated quality (yellow)
-    static func getMildlyDehydratedEvents(from events: [PeeEvent]) -> [PeeEvent] {
+    /// Returns events with normal hydration quality (yellow)
+    static func getNormalEvents(from events: [PeeEvent]) -> [PeeEvent] {
         return events.filter { $0.quality == .yellow }
     }
     
-    /// Returns events with dehydrated quality (dark yellow)
-    static func getDehydratedEvents(from events: [PeeEvent]) -> [PeeEvent] {
+    /// Returns events with mildly dehydrated quality (dark yellow)
+    static func getMildlyDehydratedEvents(from events: [PeeEvent]) -> [PeeEvent] {
         return events.filter { $0.quality == .darkYellow }
     }
     
-    /// Returns events with severely dehydrated quality (amber)
-    static func getSeverelyDehydratedEvents(from events: [PeeEvent]) -> [PeeEvent] {
+    /// Returns events with dehydrated quality (amber)
+    static func getDehydratedEvents(from events: [PeeEvent]) -> [PeeEvent] {
         return events.filter { $0.quality == .amber }
     }
     
@@ -44,36 +44,36 @@ struct QualityFilteringUtility {
         return events.filter { $0.quality == .paleYellow }.count
     }
     
-    /// Returns count of events with overhydrated quality
-    static func getOverhydratedCount(from events: [PeeEvent]) -> Int {
+    /// Returns count of events with well-hydrated quality
+    static func getWellHydratedCount(from events: [PeeEvent]) -> Int {
         return events.filter { $0.quality == .clear }.count
+    }
+    
+    /// Returns count of events with normal hydration quality
+    static func getNormalCount(from events: [PeeEvent]) -> Int {
+        return events.filter { $0.quality == .yellow }.count
     }
     
     /// Returns count of events with mildly dehydrated quality
     static func getMildlyDehydratedCount(from events: [PeeEvent]) -> Int {
-        return events.filter { $0.quality == .yellow }.count
+        return events.filter { $0.quality == .darkYellow }.count
     }
     
     /// Returns count of events with dehydrated quality
     static func getDehydratedCount(from events: [PeeEvent]) -> Int {
-        return events.filter { $0.quality == .darkYellow }.count
-    }
-    
-    /// Returns count of events with severely dehydrated quality
-    static func getSeverelyDehydratedCount(from events: [PeeEvent]) -> Int {
         return events.filter { $0.quality == .amber }.count
     }
     
     // MARK: - Quality Group Filtering
     
-    /// Returns events with acceptable hydration quality (clear or pale yellow)
+    /// Returns events with acceptable hydration quality (clear, pale yellow, or yellow)
     static func getAcceptableEvents(from events: [PeeEvent]) -> [PeeEvent] {
-        return events.filter { $0.quality == .clear || $0.quality == .paleYellow }
+        return events.filter { $0.quality == .clear || $0.quality == .paleYellow || $0.quality == .yellow }
     }
     
-    /// Returns events with concerning hydration quality (yellow, dark yellow, or amber)
+    /// Returns events with concerning hydration quality (dark yellow or amber)
     static func getConcerningEvents(from events: [PeeEvent]) -> [PeeEvent] {
-        return events.filter { $0.quality == .yellow || $0.quality == .darkYellow || $0.quality == .amber }
+        return events.filter { $0.quality == .darkYellow || $0.quality == .amber }
     }
     
     // MARK: - Quality Distribution
@@ -93,10 +93,10 @@ struct QualityFilteringUtility {
     static func getQualityDistributionSummary(from events: [PeeEvent]) -> QualityDistributionSummary {
         return QualityDistributionSummary(
             optimalCount: getOptimalCount(from: events),
-            overhydratedCount: getOverhydratedCount(from: events),
+            wellHydratedCount: getWellHydratedCount(from: events),
+            normalCount: getNormalCount(from: events),
             mildlyDehydratedCount: getMildlyDehydratedCount(from: events),
-            dehydratedCount: getDehydratedCount(from: events),
-            severelyDehydratedCount: getSeverelyDehydratedCount(from: events)
+            dehydratedCount: getDehydratedCount(from: events)
         )
     }
 }
@@ -104,13 +104,13 @@ struct QualityFilteringUtility {
 // MARK: - Quality Distribution Summary
 struct QualityDistributionSummary {
     let optimalCount: Int
-    let overhydratedCount: Int
+    let wellHydratedCount: Int
+    let normalCount: Int
     let mildlyDehydratedCount: Int
     let dehydratedCount: Int
-    let severelyDehydratedCount: Int
     
     var totalCount: Int {
-        return optimalCount + overhydratedCount + mildlyDehydratedCount + dehydratedCount + severelyDehydratedCount
+        return optimalCount + wellHydratedCount + normalCount + mildlyDehydratedCount + dehydratedCount
     }
     
     var healthScore: Double {
@@ -118,8 +118,8 @@ struct QualityDistributionSummary {
         
         // Calculate health score based on distribution
         let optimalScore = Double(optimalCount) / Double(totalCount) * 1.0
-        let acceptableScore = Double(overhydratedCount) / Double(totalCount) * 0.7
-        let concerningScore = Double(mildlyDehydratedCount + dehydratedCount + severelyDehydratedCount) / Double(totalCount) * 0.3
+        let acceptableScore = Double(wellHydratedCount + normalCount) / Double(totalCount) * 0.7
+        let concerningScore = Double(mildlyDehydratedCount + dehydratedCount) / Double(totalCount) * 0.3
         
         return optimalScore + acceptableScore + concerningScore
     }

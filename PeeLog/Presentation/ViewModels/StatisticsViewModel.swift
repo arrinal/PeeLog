@@ -664,11 +664,11 @@ final class StatisticsViewModel: ObservableObject {
 extension PeeQuality {
     var numericValue: Double {
         switch self {
-        case .paleYellow: return 5.0  // Optimal hydration
-        case .clear: return 3.5       // Overhydrated (concerning)
-        case .yellow: return 2.5      // Mildly dehydrated
-        case .darkYellow: return 1.5  // Dehydrated
-        case .amber: return 1.0       // Severely dehydrated
+        case .paleYellow: return 4.0  // Optimal hydration
+        case .clear: return 4.0       // Well hydrated (equal to paleYellow)
+        case .yellow: return 3.0      // Normal/Adequate
+        case .darkYellow: return 2.0  // Mild dehydration
+        case .amber: return 1.0       // Moderate dehydration
         }
     }
 } 

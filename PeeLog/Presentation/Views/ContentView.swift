@@ -23,6 +23,21 @@ struct ContentView: View {
     @State private var lastServerToastAt: Date = .distantPast
     @State private var showPaywall = false
     
+    private func triggerSyncIfNeeded(for user: User, reason: SyncCoordinator.SyncReason) {
+        if lastSyncedUserId != user.id {
+            lastSyncedUserId = user.id
+            Task { @MainActor in
+                let sync = container.makeSyncCoordinator(modelContext: modelContext)
+                try? await sync.syncIfNeeded(reason: reason)
+            }
+        } else {
+            Task { @MainActor in
+                let sync = container.makeSyncCoordinator(modelContext: modelContext)
+                try? await sync.syncIfNeeded(reason: reason)
+            }
+        }
+    }
+    
     var body: some View {
         Group {
             switch authState {
@@ -40,9 +55,8 @@ struct ContentView: View {
                 ))
                 .onAppear {
                     currentUser = user
+                    triggerSyncIfNeeded(for: user, reason: .appLaunch)
                     Task { @MainActor in
-                        let sync = container.makeSyncCoordinator(modelContext: modelContext)
-                        try? await sync.initialFullSync()
                         // Check subscription entitlement/trial
                         let subVM = container.makeSubscriptionViewModel(modelContext: modelContext)
                         await subVM.beginTrialIfEligible()
@@ -75,7 +89,7 @@ struct ContentView: View {
             NotificationCenter.default.addObserver(forName: .requestInitialFullSync, object: nil, queue: .main) { _ in
                 Task { @MainActor in
                     let sync = container.makeSyncCoordinator(modelContext: modelContext)
-                    try? await sync.initialFullSync()
+                    try? await sync.syncIfNeeded(reason: .pullToRefresh)
                 }
             }
             NotificationCenter.default.addObserver(forName: .serverStatusToast, object: nil, queue: .main) { note in
@@ -162,13 +176,7 @@ struct ContentView: View {
             withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
                 authState = .authenticated(user)
             }
-            if lastSyncedUserId != user.id {
-                lastSyncedUserId = user.id
-                Task { @MainActor in
-                    let sync = container.makeSyncCoordinator(modelContext: modelContext)
-                    try? await sync.initialFullSync()
-                }
-            }
+            triggerSyncIfNeeded(for: user, reason: .authResolved)
         case .unauthenticated:
             // IMPORTANT: Only transition to unauthenticated if we were previously authenticated.
             // This is the sign-out case. Never go checking → unauthenticated directly.
@@ -311,15 +319,10 @@ struct ContentView: View {
                 } else if wasOffline {
                     wasOffline = false
                     showOnlineToast = true
-                    // Trigger incremental sync and statistics refresh when back online
+                    // Trigger sync when back online (coalesced + incremental preferred)
                     Task { @MainActor in
                         let sync = container.makeSyncCoordinator(modelContext: modelContext)
-                        if let last = container.getSyncControl().lastSuccessfulSyncAt {
-                            try? await sync.incrementalSync(since: last)
-                        } else {
-                            try? await sync.initialFullSync()
-                        }
-                        container.getSyncControl().lastSuccessfulSyncAt = Date()
+                        try? await sync.syncIfNeeded(reason: .connectivityRestored)
                     }
                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                         showOnlineToast = false

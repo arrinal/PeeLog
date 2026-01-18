@@ -18,13 +18,13 @@ enum PeeQuality: String, Codable, CaseIterable {
     var description: String {
         switch self {
         case .clear: 
-            return "Overhydrated"
+            return "Well hydrated"
         case .paleYellow:
-            return "Hydrated"
+            return "Optimal"
         case .yellow:
-            return "Need water"
+            return "Normal"
         case .darkYellow:
-            return "Dehydration warning"
+            return "Drink more water"
         case .amber: 
             return "Dehydrated"
         }

@@ -10,16 +10,65 @@ import Foundation
 
 @MainActor
 final class SyncCoordinator {
+    enum SyncReason: String, Sendable {
+        case appLaunch
+        case authResolved
+        case pullToRefresh
+        case connectivityRestored
+        case manual
+    }
+    
     private let peeEventRepository: PeeEventRepository
     private let userRepository: UserRepository
     private let firestoreService: FirestoreService
     private let syncControl: SyncControl
+    
+    private let defaultCooldownSeconds: TimeInterval = 20
     
     init(peeEventRepository: PeeEventRepository, userRepository: UserRepository, firestoreService: FirestoreService, syncControl: SyncControl) {
         self.peeEventRepository = peeEventRepository
         self.userRepository = userRepository
         self.firestoreService = firestoreService
         self.syncControl = syncControl
+    }
+    
+    /// Single orchestrator entry-point: sync only when needed.
+    /// - Full sync: only when there was never a successful sync.
+    /// - Incremental sync: when we have a previous successful sync timestamp.
+    /// - Cooldown: coalesce repeated triggers within a short window.
+    func syncIfNeeded(reason: SyncReason, cooldownSeconds: TimeInterval? = nil) async throws {
+        // If a sync is already running, coalesce/ignore.
+        if syncControl.isBlocked { return }
+        
+        let cooldown = cooldownSeconds ?? defaultCooldownSeconds
+        if let last = syncControl.lastSuccessfulSyncAt,
+           Date().timeIntervalSince(last) < cooldown {
+            #if DEBUG
+            print("[Sync] Skip (cooldown) reason=\(reason.rawValue)")
+            #endif
+            return
+        }
+        
+        if let last = syncControl.lastSuccessfulSyncAt {
+            #if DEBUG
+            print("[Sync] Incremental reason=\(reason.rawValue)")
+            #endif
+            try await incrementalSync(since: last)
+        } else {
+            #if DEBUG
+            print("[Sync] Full reason=\(reason.rawValue)")
+            #endif
+            try await initialFullSync()
+        }
+    }
+    
+    /// Explicit recovery path for when a full sync is required.
+    func forceFullSync(reason: SyncReason) async throws {
+        if syncControl.isBlocked { return }
+        #if DEBUG
+        print("[Sync] Force full reason=\(reason.rawValue)")
+        #endif
+        try await initialFullSync()
     }
     
     // MARK: - Initial full sync

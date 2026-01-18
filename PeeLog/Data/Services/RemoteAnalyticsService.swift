@@ -94,7 +94,14 @@ actor RemoteAnalyticsService {
     struct InsightsResponse: Codable {
         let insights: [Insight]
     }
-    
+
+    struct DailyQualitySummaryResponse: Codable {
+        let date: String
+        let eventCount: Int
+        let label: String
+        let color: String
+    }
+
     // MARK: - Public API
     func fetchStatsOverview(range: PeriodRange) async throws -> StatsOverviewResponse {
         return try await post(path: "statsOverview", body: range)
@@ -122,7 +129,11 @@ actor RemoteAnalyticsService {
         let resp: InsightsResponse = try await post(path: "insights", body: range)
         return resp.insights
     }
-    
+
+    func fetchDailyQualitySummaries(range: PeriodRange) async throws -> [DailyQualitySummaryResponse] {
+        return try await post(path: "dailyQualitySummaries", body: range)
+    }
+
     // MARK: - Internal HTTP
     private func post<Response: Decodable, Body: Encodable>(path: String, body: Body) async throws -> Response {
         let url = config.baseURL.appendingPathComponent(path)

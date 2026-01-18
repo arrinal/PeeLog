@@ -27,6 +27,8 @@ final class AuthRepositoryImpl: AuthRepository {
     private var signOutCompletionTime: Date?
     // Flag to suppress auth state promotion during registration flow
     private var isRegisteringNewUser = false
+    // Guard to avoid repeated reload() calls in the same session
+    private var didRefreshUserThisSession = false
     
     init(firebaseAuthService: FirebaseAuthService, modelContext: ModelContext) {
         self.firebaseAuthService = firebaseAuthService
@@ -58,6 +60,7 @@ final class AuthRepositoryImpl: AuthRepository {
     private func setupObservers() {
         // Observe Firebase auth state changes
         firebaseAuthService.$isSignedIn
+            .removeDuplicates()
             .sink { [weak self] isSignedIn in
                 Task { @MainActor in
                     guard let self = self else { return }
@@ -127,15 +130,20 @@ final class AuthRepositoryImpl: AuthRepository {
             // That should NOT force the app into an unauthenticated/login state if we already
             // have a valid local user and Firebase still has a currentUser session.
             let updatedFirebaseUser: FirebaseAuth.User
-            do {
-                try await firebaseAuthService.reloadUser()
-                updatedFirebaseUser = firebaseAuthService.getCurrentUser() ?? firebaseUser
-            } catch {
-                if let authError = error as? AuthError, case .networkError = authError {
-                    // Offline: proceed with the cached Firebase user.
-                    updatedFirebaseUser = firebaseUser
-                } else {
-                    throw error
+            if didRefreshUserThisSession {
+                updatedFirebaseUser = firebaseUser
+            } else {
+                didRefreshUserThisSession = true
+                do {
+                    try await firebaseAuthService.reloadUser()
+                    updatedFirebaseUser = firebaseAuthService.getCurrentUser() ?? firebaseUser
+                } catch {
+                    if let authError = error as? AuthError, case .networkError = authError {
+                        // Offline: proceed with the cached Firebase user.
+                        updatedFirebaseUser = firebaseUser
+                    } else {
+                        throw error
+                    }
                 }
             }
             
@@ -212,6 +220,7 @@ final class AuthRepositoryImpl: AuthRepository {
     private func handleFirebaseSignOut() async {
         // If the user explicitly signed out, always honor it.
         if isSigningOut {
+            didRefreshUserThisSession = false
             currentUserSubject.send(nil)
             updateAuthState(.unauthenticated)
             return
@@ -236,6 +245,7 @@ final class AuthRepositoryImpl: AuthRepository {
 
         currentUserSubject.send(nil)
         updateAuthState(.unauthenticated)
+        didRefreshUserThisSession = false
     }
     
     // MARK: - Authentication Methods
