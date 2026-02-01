@@ -50,6 +50,7 @@ struct PeeLogApp: App {
     // State object for the container to ensure it stays alive during app lifetime
     @StateObject private var container = DependencyContainer()
     @AppStorage("selectedTheme") private var selectedTheme: String = "system"
+    @State private var showLocationPermissionAlert = false
 
     var body: some Scene {
         WindowGroup {
@@ -65,6 +66,16 @@ struct PeeLogApp: App {
                 }
                 .onOpenURL { url in
                     handleDeepLink(url)
+                }
+                .alert("Location Permission Required", isPresented: $showLocationPermissionAlert) {
+                    Button("Settings") {
+                        if let url = URL(string: UIApplication.openSettingsURLString) {
+                            UIApplication.shared.open(url)
+                        }
+                    }
+                    Button("Cancel", role: .cancel) { }
+                } message: {
+                    Text("Location access is required to save this log. Enable location in Settings and try again.")
                 }
         }
     }
@@ -147,18 +158,44 @@ extension PeeLogApp {
             var lat: Double? = nil
             var lon: Double? = nil
             var name: String? = nil
+            var hasValidLocation = false
             // Try to use current location if available
             let locRepo = container.getLocationRepository()
-            if let info = try? await locRepo.getCurrentLocation() {
+            do {
+                let info = try await locRepo.getCurrentLocation()
                 lat = info.data.coordinate.latitude
                 lon = info.data.coordinate.longitude
                 name = info.name
-            } else {
-                // Fallback to last stored shared location
-                let (coord, lastName) = SharedStorage.readLocation()
-                lat = coord?.latitude
-                lon = coord?.longitude
-                name = lastName
+                hasValidLocation = true
+            } catch let error as LocationError {
+                switch error {
+                case .permissionNotDetermined:
+                    // Try to request permission and get location again
+                    do {
+                        try await locRepo.requestPermission()
+                        let info = try await locRepo.getCurrentLocation()
+                        lat = info.data.coordinate.latitude
+                        lon = info.data.coordinate.longitude
+                        name = info.name
+                        hasValidLocation = true
+                    } catch {
+                        showLocationPermissionAlert = true
+                        return
+                    }
+                case .permissionDenied, .permissionRestricted:
+                    showLocationPermissionAlert = true
+                    return
+                default:
+                    showLocationPermissionAlert = true
+                    return
+                }
+            } catch {
+                showLocationPermissionAlert = true
+                return
+            }
+            guard hasValidLocation else {
+                showLocationPermissionAlert = true
+                return
             }
             let event = PeeEvent(
                 timestamp: Date(),

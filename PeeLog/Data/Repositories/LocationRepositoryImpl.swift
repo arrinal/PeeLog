@@ -124,7 +124,10 @@ class LocationRepositoryImpl: LocationRepository {
         lastErrorSubject.value = nil
         
         // Check if we have permission
-        guard authorizationStatusSubject.value.isAuthorized else {
+        if !authorizationStatusSubject.value.isAuthorized {
+            if authorizationStatusSubject.value == .notDetermined {
+                throw LocationError.permissionNotDetermined
+            }
             throw LocationError.permissionDenied
         }
         

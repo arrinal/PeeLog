@@ -189,22 +189,6 @@ class DependencyContainer: ObservableObject {
     
     // MARK: - Profile Feature View Models
     
-    func makeAuthenticationViewModel(modelContext: ModelContext) -> AuthenticationViewModel {
-        let authRepository = getAuthRepository(modelContext: modelContext)
-        let userRepository = getUserRepository(modelContext: modelContext)
-        
-        let authVM = AuthenticationViewModel(
-            authenticateUserUseCase: AuthenticateUserUseCase(
-                authRepository: authRepository,
-                userRepository: userRepository,
-                errorHandlingUseCase: errorHandlingUseCase
-            ),
-            errorHandlingUseCase: errorHandlingUseCase
-        )
-        authVM.setSyncControl(syncControl)
-        return authVM
-    }
-    
     func makeProfileViewModel(modelContext: ModelContext) -> ProfileViewModel {
         let authRepository = getAuthRepository(modelContext: modelContext)
         let userRepository = getUserRepository(modelContext: modelContext)

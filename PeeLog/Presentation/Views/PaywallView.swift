@@ -19,23 +19,23 @@ struct PaywallView: View {
     var body: some View {
         NavigationView {
             VStack(spacing: 24) {
-                Spacer()
                 LottieView(animationName: "paywall_waterdrop", loopMode: .loop)
                     .frame(height: 250)
                     .padding(.horizontal)
 
-                Text("Unlock PeeLog Premium")
+                Text("Unlock PeeLog")
                     .font(.largeTitle).bold()
                 Text("Get full access with cloud sync and insights.")
                     .foregroundColor(.secondary)
-
+                Spacer()
                 VStack(spacing: 12) {
-                    Label("Cloud backup and sync", systemImage: "icloud.fill")
-                    Label("Advanced PeeLog AI analytics", systemImage: "chart.bar.fill")
-                    Label("Widget quick log", systemImage: "rectangle.3.group.bubble.fill")
+                    Label("Cloud backup & sync across devices", systemImage: "icloud.fill")
+                    Label("Smart insights & analytics (PeeLog AI)", systemImage: "chart.line.uptrend.xyaxis")
+                    Label("Maps: see where you logs your pee", systemImage: "map.fill")
+                    Label("Quick Log widget for one-tap logging", systemImage: "rectangle.3.group.bubble.fill")
                 }
                 .foregroundColor(.primary)
-
+                Spacer()
                 VStack(spacing: 12) {
                     Button(action: { Task { await viewModel.startPurchaseFlow() } }) {
                         Text("Subscribe $5/month")
@@ -53,12 +53,13 @@ struct PaywallView: View {
                     }
                 }
                 
-                if !viewModel.errorMessage.isEmpty {
-                    Text(viewModel.errorMessage)
-                        .font(.footnote)
-                        .foregroundColor(.red)
-                        .multilineTextAlignment(.center)
-                }
+                // COMMENTED OUT FOR NOW TO HIDE THE ERROR MESSAGE
+                // if !viewModel.errorMessage.isEmpty {
+                //     Text(viewModel.errorMessage)
+                //         .font(.footnote)
+                //         .foregroundColor(.red)
+                //         .multilineTextAlignment(.center)
+                // }
 
                 Spacer()
             }

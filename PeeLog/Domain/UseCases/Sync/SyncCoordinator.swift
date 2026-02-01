@@ -78,6 +78,13 @@ final class SyncCoordinator {
         syncControl.isBlocked = true
         defer { syncControl.isBlocked = false }
         
+        // If we already have local events (e.g., widget logs),
+        // push them first so they won't be lost during replace.
+        let localEvents = peeEventRepository.getAllEvents()
+        if !localEvents.isEmpty {
+            try await firestoreService.upsertEvents(uid: uid, events: localEvents)
+        }
+
         // Pull cloud snapshot and replace local
         let events = try await firestoreService.fetchAllEvents(uid: uid)
         try peeEventRepository.clearAllEvents()

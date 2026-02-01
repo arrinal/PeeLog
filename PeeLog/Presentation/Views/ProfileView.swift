@@ -8,6 +8,7 @@
 import SwiftUI
 import SwiftData
 import UIKit
+import WebKit
 
 struct ProfileView: View {
     @StateObject private var viewModel: ProfileViewModel
@@ -232,18 +233,39 @@ struct ProfileView: View {
                     .foregroundColor(.secondary)
             }
             
-            HStack {
-                Image(systemName: "questionmark.circle.fill")
-                    .foregroundColor(.blue)
-                    .frame(width: 20)
-                
-                Text("Support")
-                
-                Spacer()
-                
-                Image(systemName: "chevron.right")
-                    .foregroundColor(.secondary)
-                    .font(.caption)
+            Button {
+                if let url = URL(string: "mailto:support@peelog.app") {
+                    UIApplication.shared.open(url)
+                }
+            } label: {
+                HStack {
+                    Image(systemName: "questionmark.circle.fill")
+                        .foregroundColor(.blue)
+                        .frame(width: 20)
+                    
+                    Text("Support")
+                        .foregroundColor(.primary)
+                    
+                    Spacer()
+                }
+            }
+            
+            NavigationLink(destination: SafariWebView(url: URL(string: "https://peelog.app/privacy")!, title: "Privacy Policy")) {
+                HStack {
+                    Image(systemName: "hand.raised.fill")
+                        .foregroundColor(.indigo)
+                        .frame(width: 20)
+                    Text("Privacy Policy")
+                }
+            }
+            
+            NavigationLink(destination: SafariWebView(url: URL(string: "https://peelog.app/terms")!, title: "Terms of Use")) {
+                HStack {
+                    Image(systemName: "doc.text.fill")
+                        .foregroundColor(.orange)
+                        .frame(width: 20)
+                    Text("Terms of Use")
+                }
             }
         }
     }
@@ -303,5 +325,38 @@ struct ShareSheet: UIViewControllerRepresentable {
     }
     
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
+
+// MARK: - WebView Components
+struct WebView: UIViewRepresentable {
+    let url: URL
+    
+    func makeUIView(context: Context) -> WKWebView {
+        let config = WKWebViewConfiguration()
+        let webView = WKWebView(frame: .zero, configuration: config)
+        webView.allowsBackForwardNavigationGestures = true
+        webView.backgroundColor = .systemBackground
+        webView.isOpaque = false 
+        return webView
+    }
+    
+    func updateUIView(_ uiView: WKWebView, context: Context) {
+        // Only load if url changed to avoid reload loop
+        if uiView.url?.absoluteString != url.absoluteString {
+            let request = URLRequest(url: url)
+            uiView.load(request)
+        }
+    }
+}
+
+struct SafariWebView: View {
+    let url: URL
+    let title: String
+    
+    var body: some View {
+        WebView(url: url)
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+    }
 }
  
