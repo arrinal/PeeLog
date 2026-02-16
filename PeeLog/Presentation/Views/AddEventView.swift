@@ -9,6 +9,7 @@ import SwiftUI
 import SwiftData
 import CoreLocation
 import MapKit
+import UIKit
 
 struct AddEventView: View {
     @Environment(\.dismiss) private var dismiss
@@ -226,9 +227,11 @@ struct AddEventViewContent: View {
                     .foregroundColor(.primary)
                 Spacer()
                 
-                Toggle("", isOn: $viewModel.includeLocation)
-                    .toggleStyle(SwitchToggleStyle(tint: .blue))
-                    .onChange(of: viewModel.includeLocation) { _, newValue in
+                Toggle("", isOn: Binding(
+                    get: { viewModel.includeLocation },
+                    set: { newValue in
+                        guard viewModel.canRequestLocation else { return }
+                        viewModel.includeLocation = newValue
                         if newValue {
                             Task {
                                 await viewModel.requestLocationPermission()
@@ -238,9 +241,15 @@ struct AddEventViewContent: View {
                             viewModel.stopUpdatingLocation()
                         }
                     }
+                ))
+                .toggleStyle(SwitchToggleStyle(tint: .blue))
+                .disabled(!viewModel.canRequestLocation)
+                .opacity(viewModel.canRequestLocation ? 1 : 0.5)
             }
             
-            if viewModel.includeLocation {
+            if !viewModel.canRequestLocation {
+                deniedLocationView
+            } else if viewModel.includeLocation {
                 locationContent
             }
         }
@@ -347,6 +356,39 @@ struct AddEventViewContent: View {
                 RoundedRectangle(cornerRadius: 12)
                     .fill(Color(.systemGray6))
             )
+    }
+
+    private var deniedLocationView: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "location.slash.fill")
+                .foregroundColor(.red)
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Location access denied")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.primary)
+                Text("Enable location in Settings to add location to this event.")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.leading)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .layoutPriority(1)
+            
+            Button("Settings") {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            }
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundColor(.blue)
+            .fixedSize()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.red.opacity(0.05))
+        )
     }
     
     private func mapPreviewSection(_ locationInfo: LocationInfo) -> some View {

@@ -86,10 +86,13 @@ struct ProfileView: View {
                 
                 VStack(alignment: .leading, spacing: 4) {
                     if let user = viewModel.currentUser {
-                        // Display name
-                        Text(user.displayNameOrFallback)
-                            .font(.headline)
-                            .fontWeight(.semibold)
+                        // Display name (only show if provided by Apple)
+                        if let name = user.displayName?.trimmingCharacters(in: .whitespacesAndNewlines),
+                           !name.isEmpty {
+                            Text(name)
+                                .font(.headline)
+                                .fontWeight(.semibold)
+                        }
                         
                         // Email (if available)
                         if let email = user.email {
@@ -148,23 +151,24 @@ struct ProfileView: View {
                 }
             }
             
+            // TODO: Re-enable and enhance push notifications in next release
             // Notifications Toggle
-            HStack {
-                Image(systemName: "bell.fill")
-                    .foregroundColor(.red)
-                    .frame(width: 20)
-                
-                Text("Notifications")
-                
-                Spacer()
-                
-                Toggle("", isOn: $viewModel.notificationsEnabled)
-                    .onChange(of: viewModel.notificationsEnabled) { _, enabled in
-                        Task {
-                            await viewModel.updateNotificationPreference(enabled)
-                        }
-                    }
-            }
+//            HStack {
+//                Image(systemName: "bell.fill")
+//                    .foregroundColor(.red)
+//                    .frame(width: 20)
+//                
+//                Text("Notifications")
+//                
+//                Spacer()
+//                
+//                Toggle("", isOn: $viewModel.notificationsEnabled)
+//                    .onChange(of: viewModel.notificationsEnabled) { _, enabled in
+//                        Task {
+//                            await viewModel.updateNotificationPreference(enabled)
+//                        }
+//                    }
+//            }
             
             // Sync always-on for authenticated users; no toggle shown
         }

@@ -11,7 +11,8 @@ import Foundation
 @MainActor
 protocol UpdateUserPreferencesUseCaseProtocol {
     func updatePreferences(user: User, preferences: UserPreferences) async throws -> User
-    func updateNotificationSettings(user: User, enabled: Bool) async throws -> User
+    // TODO: Re-enable in next release
+    // func updateNotificationSettings(user: User, enabled: Bool) async throws -> User
     func updateUnits(user: User, units: MeasurementUnit) async throws -> User
     func updateTheme(user: User, theme: ThemePreference) async throws -> User
     func updateSyncSettings(user: User, syncEnabled: Bool) async throws -> User
@@ -53,11 +54,12 @@ final class UpdateUserPreferencesUseCase: UpdateUserPreferencesUseCaseProtocol {
         }
     }
     
-    func updateNotificationSettings(user: User, enabled: Bool) async throws -> User {
-        var preferences = user.preferences
-        preferences.notificationsEnabled = enabled
-        return try await updatePreferences(user: user, preferences: preferences)
-    }
+    // TODO: Re-enable and enhance push notifications in next release
+    // func updateNotificationSettings(user: User, enabled: Bool) async throws -> User {
+    //     var preferences = user.preferences
+    //     preferences.notificationsEnabled = enabled
+    //     return try await updatePreferences(user: user, preferences: preferences)
+    // }
     
     func updateUnits(user: User, units: MeasurementUnit) async throws -> User {
         var preferences = user.preferences

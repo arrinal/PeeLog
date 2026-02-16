@@ -8,9 +8,11 @@
 import SwiftUI
 import SwiftData
 import MapKit
+import CoreLocation
 
 struct MapHistoryView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.dependencyContainer) private var container
     @StateObject private var viewModel: MapHistoryViewModel
     @State private var showingSheet = false
     @State private var showingPopup = false
@@ -19,6 +21,7 @@ struct MapHistoryView: View {
     @State private var selectedAnnotation: MapEventSnapshot? = nil
     @State private var isStoreResetting = false
     @State private var snapshots: [MapEventSnapshot] = []
+    @State private var resolvingLocationIds: Set<UUID> = []
     
     init(viewModel: MapHistoryViewModel) {
         _viewModel = StateObject(wrappedValue: viewModel)
@@ -47,6 +50,12 @@ struct MapHistoryView: View {
         .onReceive(NotificationCenter.default.publisher(for: .eventsStoreDidReset)) { _ in
             Task { @MainActor in
                 isStoreResetting = false
+                viewModel.loadEventsWithLocation()
+                refreshSnapshots()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .eventsDidSync)) { _ in
+            Task { @MainActor in
                 viewModel.loadEventsWithLocation()
                 refreshSnapshots()
             }
@@ -116,7 +125,13 @@ struct MapHistoryView: View {
     private var mapAnnotations: some MapContent {
         ForEach(snapshots, id: \.id) { item in
             Annotation(
-                item.locationName ?? "Pee Event",
+                {
+                    let name = item.locationName?.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if name?.isEmpty == false {
+                        return name!
+                    }
+                    return String(format: "%.4f, %.4f", item.coordinate.latitude, item.coordinate.longitude)
+                }(),
                 coordinate: item.coordinate
             ) {
                 pinView(for: item)
@@ -441,6 +456,10 @@ private extension MapHistoryView {
             snapshots = []
             return
         }
+        // Resolve missing location names in background
+        for event in viewModel.eventsWithLocation {
+            resolveLocationNameIfNeeded(for: event)
+        }
         snapshots = viewModel.eventsWithLocation.compactMap { event in
             guard let coordinate = event.locationCoordinate else { return nil }
             return MapEventSnapshot(
@@ -452,5 +471,53 @@ private extension MapHistoryView {
                 notes: event.notes
             )
         }
+    }
+
+    @MainActor
+    func resolveLocationNameIfNeeded(for event: PeeEvent) {
+        guard event.hasLocation,
+              let lat = event.latitude,
+              let lon = event.longitude else { return }
+        let trimmed = event.locationName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard trimmed.isEmpty else { return }
+        guard !resolvingLocationIds.contains(event.id) else { return }
+        resolvingLocationIds.insert(event.id)
+        let geocoder = CLGeocoder()
+        Task { @MainActor in
+            defer { resolvingLocationIds.remove(event.id) }
+            do {
+                let placemarks = try await geocoder.reverseGeocodeLocation(
+                    CLLocation(latitude: lat, longitude: lon)
+                )
+                guard let placemark = placemarks.first else { return }
+                let name = buildLocationName(from: placemark)
+                guard let name, !name.isEmpty else { return }
+                event.locationName = name
+                try? modelContext.save()
+                NotificationCenter.default.post(name: .eventsDidSync, object: nil)
+                let sync = container.makeSyncCoordinator(modelContext: modelContext)
+                Task { try? await sync.syncUpsertSingleEvent(event) }
+            } catch {
+                // keep failure silent
+            }
+        }
+    }
+
+    func buildLocationName(from placemark: CLPlacemark) -> String? {
+        var name = ""
+        if let thoroughfare = placemark.thoroughfare {
+            name += thoroughfare
+        }
+        if let subThoroughfare = placemark.subThoroughfare {
+            if !name.isEmpty { name += " " }
+            name += subThoroughfare
+        }
+        if name.isEmpty, let locality = placemark.locality {
+            name = locality
+        }
+        if name.isEmpty, let areaOfInterest = placemark.areasOfInterest?.first {
+            name = areaOfInterest
+        }
+        return name.isEmpty ? nil : name
     }
 }

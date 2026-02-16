@@ -33,7 +33,8 @@ final class ProfileViewModel: ObservableObject {
     @Published var editedDisplayName = ""
     
     // MARK: - Preferences
-    @Published var notificationsEnabled = true
+    // TODO: Re-enable and enhance push notifications in next release
+    // @Published var notificationsEnabled = true
     @Published var selectedUnits: MeasurementUnit = .metric
     @Published var selectedTheme: ThemePreference = .system
     @Published var syncEnabled = true
@@ -144,7 +145,7 @@ final class ProfileViewModel: ObservableObject {
         guard let user = currentUser else { return }
         
         let preferences = user.preferences
-        notificationsEnabled = preferences.notificationsEnabled
+        // notificationsEnabled = preferences.notificationsEnabled
         selectedUnits = preferences.units
         selectedTheme = preferences.theme
         // Sync is always on for authenticated users; keep UI field but don't expose toggle
@@ -235,10 +236,10 @@ final class ProfileViewModel: ObservableObject {
         await updateUnits()
     }
     
-    func updateNotificationPreference(_ enabled: Bool) async {
-        notificationsEnabled = enabled
-        await updateNotificationSettings()
-    }
+    // func updateNotificationPreference(_ enabled: Bool) async {
+    //     notificationsEnabled = enabled
+    //     await updateNotificationSettings()
+    // }
     
     func updateSyncPreference(_ enabled: Bool) async {
         syncEnabled = enabled
@@ -247,20 +248,20 @@ final class ProfileViewModel: ObservableObject {
     
     // MARK: - Preferences Management (Legacy Methods)
     
-    func updateNotificationSettings() async {
-        guard let user = currentUser else { return }
-        
-        do {
-            _ = try await updateUserPreferencesUseCase.updateNotificationSettings(
-                user: user,
-                enabled: notificationsEnabled
-            )
-        } catch {
-            handleError(error)
-            // Revert on error
-            notificationsEnabled = user.preferences.notificationsEnabled
-        }
-    }
+    // func updateNotificationSettings() async {
+    //     guard let user = currentUser else { return }
+    //     
+    //     do {
+    //         _ = try await updateUserPreferencesUseCase.updateNotificationSettings(
+    //             user: user,
+    //             enabled: notificationsEnabled
+    //         )
+    //     } catch {
+    //         handleError(error)
+    //         // Revert on error
+    //         notificationsEnabled = user.preferences.notificationsEnabled
+    //     }
+    // }
     
     func updateUnits() async {
         guard let user = currentUser else { return }

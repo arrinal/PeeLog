@@ -72,6 +72,8 @@ enum ThemePreference: String, Codable, CaseIterable {
 
 // MARK: - User Preferences
 struct UserPreferences: Codable, Equatable {
+    // TODO(next-release): Re-enable and enhance notifications (permission flow + scheduling).
+    // Notifications are currently disabled in-app (UI + preference updates are commented out).
     var notificationsEnabled: Bool
     var units: MeasurementUnit
     var theme: ThemePreference

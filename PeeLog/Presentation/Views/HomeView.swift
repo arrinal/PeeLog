@@ -8,6 +8,7 @@
 import SwiftUI
 import SwiftData
 import MapKit
+import CoreLocation
 
 struct HomeView: View {
     @Environment(\.modelContext) private var modelContext
@@ -19,6 +20,7 @@ struct HomeView: View {
     @State private var showingMapSheet = false
     @State private var mapPosition: MapCameraPosition = .automatic
     @State private var isStoreResetting = false
+    @State private var resolvingLocationIds: Set<UUID> = []
     
     init(viewModel: HomeViewModel) {
         _viewModel = StateObject(wrappedValue: viewModel)
@@ -138,6 +140,9 @@ struct HomeView: View {
                                                 }
                                             }
                                         )
+                                        .onAppear {
+                                            resolveLocationNameIfNeeded(for: event)
+                                        }
                                         .contextMenu {
                                             Button {
                                                 withAnimation(.spring(dampingFraction: 0.8)) {
@@ -286,6 +291,54 @@ struct HomeView: View {
             endPoint: .bottomTrailing
         )
     }
+
+    @MainActor
+    private func resolveLocationNameIfNeeded(for event: PeeEvent) {
+        guard event.hasLocation,
+              let lat = event.latitude,
+              let lon = event.longitude else { return }
+        let trimmed = event.locationName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard trimmed.isEmpty else { return }
+        guard !resolvingLocationIds.contains(event.id) else { return }
+        resolvingLocationIds.insert(event.id)
+        let geocoder = CLGeocoder()
+        Task { @MainActor in
+            defer { resolvingLocationIds.remove(event.id) }
+            do {
+                let placemarks = try await geocoder.reverseGeocodeLocation(
+                    CLLocation(latitude: lat, longitude: lon)
+                )
+                guard let placemark = placemarks.first else { return }
+                let name = buildLocationName(from: placemark)
+                guard let name, !name.isEmpty else { return }
+                event.locationName = name
+                try? modelContext.save()
+                NotificationCenter.default.post(name: .eventsDidSync, object: nil)
+                let sync = container.makeSyncCoordinator(modelContext: modelContext)
+                Task { try? await sync.syncUpsertSingleEvent(event) }
+            } catch {
+                // keep failure silent
+            }
+        }
+    }
+
+    private func buildLocationName(from placemark: CLPlacemark) -> String? {
+        var name = ""
+        if let thoroughfare = placemark.thoroughfare {
+            name += thoroughfare
+        }
+        if let subThoroughfare = placemark.subThoroughfare {
+            if !name.isEmpty { name += " " }
+            name += subThoroughfare
+        }
+        if name.isEmpty, let locality = placemark.locality {
+            name = locality
+        }
+        if name.isEmpty, let areaOfInterest = placemark.areasOfInterest?.first {
+            name = areaOfInterest
+        }
+        return name.isEmpty ? nil : name
+    }
     
     private var cardBackground: some View {
         RoundedRectangle(cornerRadius: 20)
@@ -392,14 +445,22 @@ struct EventCard: View {
                     ///
                     HStack(alignment: .top) {
                         VStack(alignment: .leading) {
-                            if event.hasLocation, let locationName = event.locationName {
+                            if event.hasLocation {
+                                let trimmedName = event.locationName?.trimmingCharacters(in: .whitespacesAndNewlines)
+                                let hasName = !(trimmedName ?? "").isEmpty
                                 HStack(spacing: 6) {
                                     Image(systemName: "mappin.circle.fill")
                                         .font(.system(size: 14))
                                         .foregroundColor(.teal)
-                                    Text(locationName)
-                                        .font(.system(size: 13, weight: .medium))
-                                        .foregroundColor(.blue)
+                                    if hasName, let locationName = trimmedName {
+                                        Text(locationName)
+                                            .font(.system(size: 13, weight: .medium))
+                                            .foregroundColor(.blue)
+                                    } else if let lat = event.latitude, let lon = event.longitude {
+                                        Text(String(format: "%.4f, %.4f", lat, lon))
+                                            .font(.system(size: 13, weight: .medium))
+                                            .foregroundColor(.blue)
+                                    }
                                 }
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 6)

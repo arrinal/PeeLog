@@ -85,9 +85,8 @@ final class SyncCoordinator {
             try await firestoreService.upsertEvents(uid: uid, events: localEvents)
         }
 
-        // Pull cloud snapshot and replace local
+        // Pull cloud snapshot and merge into local (no destructive clear)
         let events = try await firestoreService.fetchAllEvents(uid: uid)
-        try peeEventRepository.clearAllEvents()
         try peeEventRepository.addEvents(events)
         NotificationCenter.default.post(name: .eventsDidSync, object: nil)
         syncControl.lastSuccessfulSyncAt = Date()

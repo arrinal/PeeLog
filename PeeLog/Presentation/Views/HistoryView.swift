@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import CoreLocation
 
 // Using shared TimePeriod enum from Domain/Entities/TimePeriod.swift
 
@@ -24,6 +25,7 @@ struct HistoryView: View {
     @State private var showingFilterSheet = false
     @State private var isStoreResetting = false
     @State private var dailySummaries: [String: DailyQualitySummary] = [:] // keyed by ISO date
+    @State private var resolvingLocationIds: Set<UUID> = []
     
     var filteredEvents: [PeeEvent] {
         let range = selectedFilter == .custom ? (customStartDate, customEndDate) : selectedFilter.dateRange
@@ -132,6 +134,9 @@ struct HistoryView: View {
                                     onEventTap: { event in
                                         selectedEvent = event
                                         showingMapSheet = true
+                                    },
+                                    onEventAppear: { event in
+                                        resolveLocationNameIfNeeded(for: event)
                                     }
                                 )
                             }
@@ -281,6 +286,54 @@ struct HistoryView: View {
             .fill(Color(.systemBackground).opacity(0.8))
             .stroke(Color.blue.opacity(0.2), lineWidth: 1)
     }
+
+    @MainActor
+    private func resolveLocationNameIfNeeded(for event: PeeEvent) {
+        guard event.hasLocation,
+              let lat = event.latitude,
+              let lon = event.longitude else { return }
+        let trimmed = event.locationName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard trimmed.isEmpty else { return }
+        guard !resolvingLocationIds.contains(event.id) else { return }
+        resolvingLocationIds.insert(event.id)
+        let geocoder = CLGeocoder()
+        Task { @MainActor in
+            defer { resolvingLocationIds.remove(event.id) }
+            do {
+                let placemarks = try await geocoder.reverseGeocodeLocation(
+                    CLLocation(latitude: lat, longitude: lon)
+                )
+                guard let placemark = placemarks.first else { return }
+                let name = buildLocationName(from: placemark)
+                guard let name, !name.isEmpty else { return }
+                event.locationName = name
+                try? modelContext.save()
+                NotificationCenter.default.post(name: .eventsDidSync, object: nil)
+                let sync = container.makeSyncCoordinator(modelContext: modelContext)
+                Task { try? await sync.syncUpsertSingleEvent(event) }
+            } catch {
+                // keep failure silent
+            }
+        }
+    }
+
+    private func buildLocationName(from placemark: CLPlacemark) -> String? {
+        var name = ""
+        if let thoroughfare = placemark.thoroughfare {
+            name += thoroughfare
+        }
+        if let subThoroughfare = placemark.subThoroughfare {
+            if !name.isEmpty { name += " " }
+            name += subThoroughfare
+        }
+        if name.isEmpty, let locality = placemark.locality {
+            name = locality
+        }
+        if name.isEmpty, let areaOfInterest = placemark.areasOfInterest?.first {
+            name = areaOfInterest
+        }
+        return name.isEmpty ? nil : name
+    }
     
     private func groupEventsByDay() -> [(date: Date, events: [PeeEvent])] {
         let grouped = CalendarUtility.groupEventsByDay(filteredEvents, dateKeyPath: \.timestamp)
@@ -310,6 +363,7 @@ struct DayGroupCard: View {
     let events: [PeeEvent]
     let backendSummary: DailyQualitySummary?
     let onEventTap: (PeeEvent) -> Void
+    let onEventAppear: (PeeEvent) -> Void
 
     @Environment(\.colorScheme) private var colorScheme
 
@@ -357,6 +411,9 @@ struct DayGroupCard: View {
             VStack(spacing: 12) {
                 ForEach(events.sorted { $0.timestamp > $1.timestamp }) { event in
                     HistoryEventCard(event: event, onEventTap: onEventTap)
+                        .onAppear {
+                            onEventAppear(event)
+                        }
                 }
             }
         }
@@ -442,14 +499,22 @@ struct HistoryEventCard: View {
                 
                 HStack(alignment: .top) {
                     VStack(alignment: .leading) {
-                        if event.hasLocation, let locationName = event.locationName {
+                        if event.hasLocation {
+                            let trimmedName = event.locationName?.trimmingCharacters(in: .whitespacesAndNewlines)
+                            let hasName = !(trimmedName ?? "").isEmpty
                             HStack(spacing: 4) {
                                 Image(systemName: "mappin.circle.fill")
                                     .font(.system(size: 12))
                                     .foregroundColor(.teal)
-                                Text(locationName)
-                                    .font(.system(size: 11, weight: .medium))
-                                    .foregroundColor(.blue)
+                                if hasName, let locationName = trimmedName {
+                                    Text(locationName)
+                                        .font(.system(size: 11, weight: .medium))
+                                        .foregroundColor(.blue)
+                                } else if let lat = event.latitude, let lon = event.longitude {
+                                    Text(String(format: "%.4f, %.4f", lat, lon))
+                                        .font(.system(size: 11, weight: .medium))
+                                        .foregroundColor(.blue)
+                                }
                             }
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)

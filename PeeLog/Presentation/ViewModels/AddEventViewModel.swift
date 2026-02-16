@@ -51,7 +51,7 @@ class AddEventViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] locationInfo in
                 self?.currentLocationInfo = locationInfo
-                self?.locationName = locationInfo?.name
+                self?.locationName = self?.sanitizeLocationName(locationInfo?.name)
             }
             .store(in: &cancellables)
         
@@ -168,13 +168,14 @@ class AddEventViewModel: ObservableObject {
         
         // Create event with location if available and requested
         if includeLocation, let locationInfo = currentLocationInfo {
+            let safeName = sanitizeLocationName(locationInfo.name)
             return PeeEvent(
                 timestamp: combinedTimestamp,
                 notes: trimmedNotes.isEmpty ? nil : trimmedNotes,
                 quality: selectedQuality,
                 latitude: locationInfo.data.coordinate.latitude,
                 longitude: locationInfo.data.coordinate.longitude,
-                locationName: locationInfo.name
+                locationName: safeName
             )
         } else {
             return PeeEvent(
@@ -249,10 +250,25 @@ class AddEventViewModel: ObservableObject {
         do {
             let locationInfo = try await locationRepository.getCurrentLocation()
             currentLocationInfo = locationInfo
-            locationName = locationInfo.name
+            locationName = sanitizeLocationName(locationInfo.name)
         } catch {
             // Error is already handled by the repository observer
         }
+    }
+
+    // MARK: - Location Name Helpers
+    private func sanitizeLocationName(_ name: String?) -> String? {
+        guard let raw = name?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !raw.isEmpty else {
+            return nil
+        }
+        let lower = raw.lowercased()
+        let placeholders = [
+            "current location",
+            "unknown location",
+            "location found"
+        ]
+        return placeholders.contains(lower) ? nil : raw
     }
     
     // MARK: - Utility Methods

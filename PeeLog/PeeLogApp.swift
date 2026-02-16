@@ -11,6 +11,7 @@ import FirebaseCore
 import FirebaseFirestore
 import FirebaseAnalytics
 import AppIntents
+import CoreLocation
 
 class AppDelegate: NSObject, UIApplicationDelegate {
   func application(_ application: UIApplication,
@@ -105,6 +106,7 @@ extension PeeLogApp {
         let payloads = QuickLogQueue.drain()
         guard !payloads.isEmpty else { return }
         let repo = container.makePeeEventRepository(modelContext: sharedModelContainer.mainContext)
+        let sync = container.makeSyncCoordinator(modelContext: sharedModelContainer.mainContext)
         var didAddAny = false
         for payload in payloads {
             let tsAny = payload["timestamp"]
@@ -131,6 +133,7 @@ extension PeeLogApp {
                 try repo.addEvent(event)
                 didAddAny = true
                 AnalyticsLogger.logQuickLog(mode: "no_loc", source: "widget_appintent", quality: quality)
+                Task { try? await sync.syncUpsertSingleEvent(event) }
             } catch {
                 // keep failure silent in production
             }
@@ -155,17 +158,26 @@ extension PeeLogApp {
         }
         Task { @MainActor in
             let repo = container.makePeeEventRepository(modelContext: sharedModelContainer.mainContext)
+            let sync = container.makeSyncCoordinator(modelContext: sharedModelContainer.mainContext)
             var lat: Double? = nil
             var lon: Double? = nil
             var name: String? = nil
             var hasValidLocation = false
             // Try to use current location if available
             let locRepo = container.getLocationRepository()
+            func applyFallbackCoordinates() -> Bool {
+                let (coord, _) = SharedStorage.readLocation()
+                guard let coord else { return false }
+                lat = coord.latitude
+                lon = coord.longitude
+                name = nil
+                return true
+            }
             do {
                 let info = try await locRepo.getCurrentLocation()
                 lat = info.data.coordinate.latitude
                 lon = info.data.coordinate.longitude
-                name = info.name
+                name = isMeaningfulLocationName(info.name) ? info.name : nil
                 hasValidLocation = true
             } catch let error as LocationError {
                 switch error {
@@ -176,8 +188,23 @@ extension PeeLogApp {
                         let info = try await locRepo.getCurrentLocation()
                         lat = info.data.coordinate.latitude
                         lon = info.data.coordinate.longitude
-                        name = info.name
+                        name = isMeaningfulLocationName(info.name) ? info.name : nil
                         hasValidLocation = true
+                    } catch let innerError as LocationError {
+                        switch innerError {
+                        case .timeout, .geocodingFailed, .locationUnavailable, .serviceUnavailable:
+                            hasValidLocation = applyFallbackCoordinates()
+                            if !hasValidLocation {
+                                showLocationPermissionAlert = true
+                                return
+                            }
+                        case .permissionDenied, .permissionRestricted, .permissionNotDetermined:
+                            showLocationPermissionAlert = true
+                            return
+                        default:
+                            showLocationPermissionAlert = true
+                            return
+                        }
                     } catch {
                         showLocationPermissionAlert = true
                         return
@@ -185,6 +212,12 @@ extension PeeLogApp {
                 case .permissionDenied, .permissionRestricted:
                     showLocationPermissionAlert = true
                     return
+                case .timeout, .geocodingFailed, .locationUnavailable, .serviceUnavailable:
+                    hasValidLocation = applyFallbackCoordinates()
+                    if !hasValidLocation {
+                        showLocationPermissionAlert = true
+                        return
+                    }
                 default:
                     showLocationPermissionAlert = true
                     return
@@ -197,6 +230,7 @@ extension PeeLogApp {
                 showLocationPermissionAlert = true
                 return
             }
+            // If name resolution failed, proceed with coordinates only (name = nil)
             let event = PeeEvent(
                 timestamp: Date(),
                 notes: nil,
@@ -210,10 +244,87 @@ extension PeeLogApp {
                 try repo.addEvent(event)
                 NotificationCenter.default.post(name: .eventsDidSync, object: nil)
                 AnalyticsLogger.logQuickLog(mode: "with_loc", source: "deeplink_widget", quality: quality)
+                Task { try? await sync.syncUpsertSingleEvent(event) }
+                if name == nil, let lat, let lon {
+                    Task { @MainActor in
+                        await resolveAndUpdateLocationName(for: event, coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lon))
+                    }
+                }
             } catch {
                 // keep failure silent in production
             }
         }
+    }
+
+    // Timeout helper
+    private func withTimeout<T: Sendable>(seconds: TimeInterval, operation: @escaping @Sendable () async throws -> T) async throws -> T {
+        try await withThrowingTaskGroup(of: T.self) { group in
+            group.addTask {
+                return try await operation()
+            }
+            group.addTask {
+                try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+                throw LocationError.timeout
+            }
+            guard let result = try await group.next() else {
+                throw LocationError.timeout
+            }
+            group.cancelAll()
+            return result
+        }
+    }
+
+    private func isMeaningfulLocationName(_ name: String?) -> Bool {
+        guard let name = name?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !name.isEmpty else {
+            return false
+        }
+        let lower = name.lowercased()
+        let placeholders = [
+            "current location",
+            "unknown location",
+            "location found"
+        ]
+        return !placeholders.contains(lower)
+    }
+
+    @MainActor
+    private func resolveAndUpdateLocationName(for event: PeeEvent, coordinate: CLLocationCoordinate2D) async {
+        let geocoder = CLGeocoder()
+        do {
+            let placemarks = try await withTimeout(seconds: 3) {
+                try await geocoder.reverseGeocodeLocation(
+                    CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
+                )
+            }
+            guard let placemark = placemarks.first else { return }
+            let name = buildLocationName(from: placemark)
+            guard isMeaningfulLocationName(name) else { return }
+            // Update event in-place and persist
+            event.locationName = name
+            try? sharedModelContainer.mainContext.save()
+            NotificationCenter.default.post(name: .eventsDidSync, object: nil)
+        } catch {
+            // If geocoding fails, keep name nil
+        }
+    }
+
+    private func buildLocationName(from placemark: CLPlacemark) -> String? {
+        var name = ""
+        if let thoroughfare = placemark.thoroughfare {
+            name += thoroughfare
+        }
+        if let subThoroughfare = placemark.subThoroughfare {
+            if !name.isEmpty { name += " " }
+            name += subThoroughfare
+        }
+        if name.isEmpty, let locality = placemark.locality {
+            name = locality
+        }
+        if name.isEmpty, let areaOfInterest = placemark.areasOfInterest?.first {
+            name = areaOfInterest
+        }
+        return name.isEmpty ? nil : name
     }
 }
 
