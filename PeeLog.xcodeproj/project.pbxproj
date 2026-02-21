@@ -634,9 +634,9 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = PeeLog/Info.plist;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
-				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Pee Tracker needs your location to record where pee events occurred.";
-				INFOPLIST_KEY_NSLocationAlwaysUsageDescription = "Pee Tracker needs your location to record where pee events occurred.";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Pee Tracker needs your location to record where pee events occurred.";
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "PeeLog needs your location to record where pee events occurred.";
+				INFOPLIST_KEY_NSLocationAlwaysUsageDescription = "PeeLog needs your location to record where pee events occurred.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "PeeLog needs your location to record where pee events occurred.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -671,9 +671,9 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = PeeLog/Info.plist;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
-				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Pee Tracker needs your location to record where pee events occurred.";
-				INFOPLIST_KEY_NSLocationAlwaysUsageDescription = "Pee Tracker needs your location to record where pee events occurred.";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Pee Tracker needs your location to record where pee events occurred.";
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "PeeLog needs your location to record where pee events occurred.";
+				INFOPLIST_KEY_NSLocationAlwaysUsageDescription = "PeeLog needs your location to record where pee events occurred.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "PeeLog needs your location to record where pee events occurred.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

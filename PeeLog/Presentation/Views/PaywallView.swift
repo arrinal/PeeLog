@@ -17,7 +17,7 @@ struct PaywallView: View {
     }
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack(spacing: 24) {
                 LottieView(animationName: "paywall_waterdrop", loopMode: .loop)
                     .frame(height: 250)
@@ -53,13 +53,12 @@ struct PaywallView: View {
                     }
                 }
                 
-                // COMMENTED OUT FOR NOW TO HIDE THE ERROR MESSAGE
-                // if !viewModel.errorMessage.isEmpty {
-                //     Text(viewModel.errorMessage)
-                //         .font(.footnote)
-                //         .foregroundColor(.red)
-                //         .multilineTextAlignment(.center)
-                // }
+                if !viewModel.errorMessage.isEmpty {
+                    Text(viewModel.errorMessage)
+                        .font(.footnote)
+                        .foregroundColor(.red)
+                        .multilineTextAlignment(.center)
+                }
 
                 Spacer()
             }
