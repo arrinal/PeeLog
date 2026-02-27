@@ -6,10 +6,14 @@
 //
 
 import SwiftUI
+import StoreKit
 
 struct PaywallView: View {
     @StateObject private var viewModel: SubscriptionViewModel
     private let onEntitlementChanged: ((EntitlementStatus) -> Void)?
+
+    @State private var monthlyPriceText: String = "$5"
+    private let monthlyProductId = "com.arrinal.PeeLog.subscription.monthly"
 
     init(viewModel: SubscriptionViewModel, onEntitlementChanged: ((EntitlementStatus) -> Void)? = nil) {
         _viewModel = StateObject(wrappedValue: viewModel)
@@ -38,7 +42,7 @@ struct PaywallView: View {
                 Spacer()
                 VStack(spacing: 12) {
                     Button(action: { Task { await viewModel.startPurchaseFlow() } }) {
-                        Text("Subscribe $5/month")
+                        Text("Subscribe \(monthlyPriceText)/month")
                             .font(.headline)
                             .frame(maxWidth: .infinity, minHeight: 50)
                             .foregroundColor(.white)
@@ -51,8 +55,16 @@ struct PaywallView: View {
                         Text("Restore Purchases")
                             .font(.subheadline)
                     }
+
+                    HStack(spacing: 12) {
+                        Link("Privacy Policy", destination: URL(string: "https://peelog.app/privacy")!)
+                        Text("•")
+                        Link("Terms of Use", destination: URL(string: "https://peelog.app/terms")!)
+                    }
+                    .font(.footnote)
+                    .foregroundColor(.secondary)
                 }
-                
+
                 if !viewModel.errorMessage.isEmpty {
                     Text(viewModel.errorMessage)
                         .font(.footnote)
@@ -64,11 +76,19 @@ struct PaywallView: View {
             }
             .padding()
             .navigationBarTitleDisplayMode(.inline)
-            .task { await viewModel.refreshEntitlement() }
+            .task {
+                await viewModel.refreshEntitlement()
+                await loadPriceFromStoreKit()
+            }
             .onChange(of: viewModel.entitlementStatus) { _, newValue in
                 onEntitlementChanged?(newValue)
             }
         }
     }
-}
 
+    @MainActor
+    private func loadPriceFromStoreKit() async {
+        guard let product = try? await Product.products(for: [monthlyProductId]).first else { return }
+        monthlyPriceText = product.displayPrice
+    }
+}
