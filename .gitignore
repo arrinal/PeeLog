@@ -5,3 +5,4 @@ Package.resolved
 **/GoogleService-Info.plist
 .claude/
 .cursor/
+.agents/
